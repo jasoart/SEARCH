@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>數學公式搜尋引擎</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [["$", "$"], ["\\(", "\\)"]],
+                displayMath: [["$$", "$$"], ["\\[", "\\]"]]
+            },
+            svg: {
+                fontCache: "global"
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        body {
+            font-family: Inter, 'Noto Sans TC', sans-serif;
+            background-color: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .formula-display {
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: .5rem 0;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 1rem;
+        }
+
+        .modal {
+            transition: opacity .3s ease-out;
+        }
+
+        .modal-content {
+            transition: transform .3s ease-out;
+        }
+
+        #modalBody p {
+            margin-bottom: 1em;
+        }
+
+        .proof-content {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .btn-primary {
+            background-color: #3b82f6;
+            color: #fff;
+            font-weight: 500;
+            padding: .5rem 1.5rem;
+            border-radius: .25rem;
+            outline: 0;
+            border: none;
+            cursor: pointer;
+            transition: background-color .2s ease-in-out, box-shadow .2s ease-in-out;
+        }
+
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+
+        .btn-primary:focus {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, .5);
+        }
+
+        .card-title {
+            color: #1e3a8a;
+        }
+
+        .card-formula {
+            color: #1d4ed8;
+            font-weight: 500;
+        }
+
+        .autocomplete-suggestions {
+            position: absolute;
+            z-index: 10;
+            background-color: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: .25rem;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 100%;
+            box-shadow: 0 1px 3px rgba(0,0,0,.1);
+            list-style: none;
+            padding: 0;
+            margin-top: .25rem;
+        }
+
+        .autocomplete-suggestions li {
+            padding: .5rem 1rem;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f4f8;
+        }
+
+        .autocomplete-suggestions li:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-suggestions li.active,
+        .autocomplete-suggestions li:hover {
+            background-color: #e0f2fe;
+            color: #1e40af;
+        }
+
+        .filter-select {
+            padding: .5rem 1rem;
+            border-radius: .25rem;
+            border: 1px solid #cbd5e1;
+            background-color: #fff;
+            font-size: 1rem;
+            color: #4a5568;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='currentColor'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right .75rem center;
+            background-size: 1.25em;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,.05);
+        }
+
+        .filter-select:focus {
+            outline: 0;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, .4);
+        }
+
+        #assistant {
+            z-index: 60;
+        }
+
+        #assistant-message {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            right: 0;
+            background-color: #fff;
+            padding: 10px 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            white-space: nowrap;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #assistant-message.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        #assistant-message .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.2em;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            transition: color 0.2s ease;
+        }
+
+        #assistant-message .close-btn:hover {
+            color: #475569;
+        }
+
+        @keyframes speak {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+            100% { transform: translateY(0); }
+        }
+
+        #assistant.speaking .assistant-icon {
+            animation: speak 0.8s infinite alternate;
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+
+        .loader.visible {
+            display: block;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+    <div class="container mx-auto p-4 md:p-8 flex-grow">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-800 mb-2">數學公式搜尋引擎</h1>
+            <p class="text-blue-600 text-lg">輸入關鍵字搜尋公式，並查看其證明</p>
+        </header>
+
+        <div class="max-w-2xl mx-auto mb-4 relative">
+            <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8 4a4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <input type="text" id="searchInput" placeholder="例如：微積分、正弦定理、矩陣..."
+                       class="w-full bg-white border border-gray-300 rounded-md py-2 pl-10 pr-4 text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-base"
+                       aria-label="搜尋數學公式">
+                <button id="clearSearchBtn" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 hidden" aria-label="清除搜尋">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <ul id="autocompleteSuggestions" class="autocomplete-suggestions hidden"></ul>
+        </div>
+
+        <div class="max-w-2xl mx-auto mb-8 flex flex-col sm:flex-row justify-center gap-3">
+            <div class="relative w-full sm:w-1/2">
+                <label for="gradeFilter" class="sr-only">年級篩選</label>
+                <select id="gradeFilter" class="filter-select w-full">
+                    <option value="">所有年級</option>
+                    <option value="國小">國小</option>
+                    <option value="國中">國中</option>
+                    <option value="高中">高中</option>
+                    <option value="大學/進階">大學/進階</option>
+                </select>
+            </div>
+            <div class="relative w-full sm:w-1/2">
+                <label for="topicFilter" class="sr-only">主題篩選</label>
+                <select id="topicFilter" class="filter-select w-full">
+                    <option value="">所有主題</option>
+                    <option value="代數">代數</option>
+                    <option value="幾何">幾何</option>
+                    <option value="微積分">微積分</option>
+                    <option value="機率與統計">機率與統計</option>
+                    <option value="數論">數論</option>
+                    <option value="離散數學">離散數學</option>
+                    <option value="抽象代數">抽象代數</option>
+                    <option value="實分析">實分析</option>
+                    <option value="微分方程">微分方程</option>
+                    <option value="拓撲學">拓撲學</option>
+                    <option value="複變函數">複變函數</option>
+                    <option value="線性代數">線性代數</option>
+                    <option value="其他">其他</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="loader" class="loader"></div>
+
+        <main id="resultsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></main>
+
+        <div id="noResults" class="text-center text-gray-500 py-8 hidden">
+            <h3 class="text-xl font-semibold">找不到結果</h3>
+            <p class="mt-1 text-base">請試試其他的關鍵字。</p>
+        </div>
+    </div>
+
+    <div id="proofModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 hidden modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col modal-content">
+            <header class="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+                <h2 id="modalTitle" class="text-xl font-bold text-gray-800">證明</h2>
+                <button id="closeModalBtn" class="text-gray-500 hover:text-gray-700" aria-label="關閉證明視窗">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </header>
+            <div id="modalBody" class="p-4 overflow-y-auto" tabindex="-1">
+            </div>
+        </div>
+    </div>
+
+    <div id="termsModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 hidden modal" role="dialog" aria-modal="true" aria-labelledby="termsModalTitle">
+        <div class="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col modal-content">
+            <header class="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+                <h2 id="termsModalTitle" class="text-xl font-bold text-gray-800">服務條款</h2>
+                <button id="closeTermsModalBtn" class="text-gray-500 hover:text-gray-700" aria-label="關閉服務條款視窗">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </header>
+            <div id="termsBody" class="p-4 overflow-y-auto text-gray-700" tabindex="-1">
+                <h3 class="text-lg font-semibold mb-2">1. 服務介紹</h3>
+                <p class="mb-3">本「數學公式搜尋引擎」應用程式（以下簡稱「本應用程式」）旨在提供使用者一個便捷的平台，用於搜尋各類數學公式並查看其證明。本應用程式所提供的所有內容僅供教育、學術研究及個人參考之用。</p>
+                <h3 class="text-lg font-semibold mb-2">2. 內容準確性與免責聲明</h3>
+                <p class="mb-3">本應用程式致力於確保所呈現公式和證明的準確性與完整性。然而，鑑於數學知識的廣泛性及複雜性，我們不保證所有內容絕對無誤或適用於所有情境。使用者應自行判斷、驗證內容的適用性及準確性，並對其使用結果負全部責任。對於因使用或無法使用本應用程式所造成的任何直接、間接、附帶或衍生性損害，本應用程式概不負責。</p>
+                <h3 class="text-lg font-semibold mb-2">3. 智慧財產權</h3>
+                <p class="mb-3">本應用程式中顯示的所有數學公式、證明文字、介面設計、程式碼、圖形及其他內容，其著作權、商標權及其他智慧財產權均為本應用程式及其內容提供者所有。未經本應用程式明確書面授權，嚴禁任何形式的複製、修改、分發、公開展示、反向工程、抓取（包括但不限於用於AI模型訓練）、或以其他方式利用本應用程式的任何部分用於商業或其他未經許可之目的。</p>
+                <h3 class="text-lg font-semibold mb-2">4. 使用者行為規範</h3>
+                <p class="mb-3">使用者應遵守所有適用法律法規，並以合法、合理、友善的方式使用本應用程式。嚴禁任何可能干擾、破壞本應用程式正常運作、損害其他使用者權益、或發佈任何非法、侵權、誹謗、淫穢、威脅性或不當內容的行為。</p>
+                <h3 class="text-lg font-semibold mb-2">5. 隱私政策簡述</h3>
+                <p class="mb-3">本應用程式僅為前端展示，不主動收集、儲存或處理任何個人身份資訊。您的搜尋行為和使用數據不會被記錄或用於追蹤。若未來服務功能有所調整涉及數據收集，將另行發布詳細隱私政策。</p>
+                <h3 class="text-lg font-semibold mb-2">6. 服務中斷與終止</h3>
+                <p class="mb-3">本應用程式可能因系統維護、網路故障、不可抗力或其他原因而暫時或永久中斷服務，恕不另行通知。本應用程式保留隨時終止或限制任何使用者存取本服務的權利，特別是對於違反本服務條款的行為，無需提前通知。</p>
+                <h3 class="text-lg font-semibold mb-2">7. 服務條款修訂</h3>
+                <p class="mb-3">本應用程式保留隨時修訂、更新或變更本服務條款的權利。任何修訂後的條款將立即在本應用程式中公佈並生效。使用者在條款修訂後繼續使用本應用程式，即表示已閱讀、理解並同意接受所有修訂後的條款。</p>
+                <h3 class="text-lg font-semibold mb-2">8. 聯繫我們</h3>
+                <p class="mb-3">如果您對本服務條款有任何疑問或需要協助，請隨時透過電子郵件聯繫我們：jason303@smail.ilc.edu.tw。</p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center mt-12 p-4 text-gray-600 text-sm bg-gray-100 border-t border-gray-200">
+        <button id="openTermsBtn" class="text-blue-600 hover:text-blue-800 font-medium text-base" aria-haspopup="dialog" aria-expanded="false">服務條款</button>
+        <p class="mt-2 text-gray-700">&copy; 2025 數學公式搜尋引擎. All rights reserved.</p>
+    </footer>
+
+    <div id="assistant" class="fixed bottom-4 right-4 bg-white p-4 rounded-full shadow-lg flex items-center space-x-2 cursor-pointer transition-all duration-300 hover:scale-105 relative" aria-label="數學助教">
+        <span role="img" aria-label="可愛的機器人助教" class="text-3xl assistant-icon">🤖</span>
+        <span class="text-blue-700 font-semibold text-lg hidden md:block">我是你的數學助教！</span>
+        <div id="assistant-message" class="text-gray-700 text-sm">
+            <span>需要幫忙嗎？試試搜尋或篩選公式喔！</span>
+            <button class="close-btn" aria-label="關閉訊息">×</button>
+        </div>
+    </div>
+
+    <script>
+        const formulas = [
+            { id: 100, name: '加法交換律', formula: 'a + b = b + a', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'addition', '國小', '算術', '加法', '交換律'], proof: '加法交換律是一個基本公理，表示兩個數相加，其順序不影響結果。例如：$2 + 3 = 5$ 和 $3 + 2 = 5$。' },
+            { id: 101, name: '加法結合律', formula: '(a + b) + c = a + (b + c)', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'addition', '國小', '算術', '加法', '結合律'], proof: '加法結合律是一個基本公理，表示三個或更多數相加，其分組方式不影響結果。例如：$(1 + 2) + 3 = 3 + 3 = 6$ 和 $1 + (2 + 3) = 1 + 5 = 6$。' },
+            { id: 102, name: '乘法交換律', formula: 'a \\times b = b \\times a', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'multiplication', '國小', '算術', '乘法', '交換律'], proof: '乘法交換律是一個基本公理，表示兩個數相乘，其順序不影響結果。例如：$2 \\times 3 = 6$ 和 $3 \\times 2 = 6$。' },
+            { id: 103, name: '乘法結合律', formula: '(a \\times b) \\times c = a \\times (b \\times c)', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'multiplication', '國小', '算術', '乘法', '結合律'], proof: '乘法結合律是一個基本公理，表示三個或更多數相乘，其分組方式不影響結果。例如：$(1 \\times 2) \\times 3 = 2 \\times 3 = 6$ 和 $1 \\times (2 \\times 3) = 1 \\times 6 = 6$。' },
+            { id: 104, name: '乘法分配律', formula: 'a \\times (b + c) = a \\times b + a \\times c', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'multiplication', 'addition', '國小', '算術', '乘法', '加法', '分配律'], proof: '乘法分配律是一個基本公理，表示乘法對加法具有分配性。例如：$2 \\times (3 + 4) = 2 \\times 7 = 14$，同時 $2 \\times 3 + 2 \\times 4 = 6 + 8 = 14$。' },
+            { id: 105, name: '長方形面積', formula: 'A = \\text{長} \\times \\text{寬}', grade: '國小', topic: '幾何', tags: ['elementary', 'geometry', 'area', 'rectangle', '國小', '幾何', '面積', '長方形'], proof: '長方形的面積是其長度與寬度的乘積。這可以想像為用單位正方形鋪滿長方形。' },
+            { id: 106, name: '長方形周長', formula: 'P = 2 \\times (\\text{長} + \\text{寬})', grade: '國小', topic: '幾何', tags: ['elementary', 'geometry', 'perimeter', 'rectangle', '國小', '幾何', '周長', '長方形'], proof: '長方形有兩條等長的邊和兩條等寬的邊。周長是所有邊長之和，即 長 + 寬 + 長 + 寬 = $2 \\times (\\text{長} + \\text{寬})$。' },
+            { id: 107, name: '正方形面積', formula: 'A = \\text{邊長} \\times \\text{邊長} = s^2', grade: '國小', topic: '幾何', tags: ['elementary', 'geometry', 'area', 'square', '國小', '幾何', '面積', '正方形'], proof: '正方形是特殊的長方形，其長和寬相等，因此面積是邊長的平方。' },
+            { id: 108, name: '正方形周長', formula: 'P = 4 \\times \\text{邊長} = 4s', grade: '國小', topic: '幾何', tags: ['elementary', 'geometry', 'perimeter', 'square', '國小', '幾何', '周長', '正方形'], proof: '正方形有四條等長的邊，所以周長是邊長的四倍。' },
+            { id: 109, name: '三角形面積', formula: 'A = \\frac{1}{2} \\times \\text{底} \\times \\text{高}', grade: '國小', topic: '幾何', tags: ['elementary', 'geometry', 'area', 'triangle', '國小', '幾何', '面積', '三角形'], proof: '任何三角形都可以看作是某個平行四邊形（或矩形）的一半。將兩個全等的三角形拼成一個平行四邊形，其面積為底乘以高，所以單個三角形面積為其一半。' },
+            { id: 150, name: '梯形面積', formula: 'A = \\frac{1}{2} (a+b)h', grade: '國小', topic: '幾何', tags: ['elementary', 'geometry', 'area', 'trapezoid', '國小', '幾何', '面積', '梯形'], proof: '將兩個全等的梯形倒置相接，可以組成一個平行四邊形，其底為兩梯形上底和下底之和 $(a+b)$，高不變 $(h)$。平行四邊形面積為 $(a+b)h$，因此梯形面積為其一半。' },
+            { id: 151, name: '平行四邊形面積', formula: 'A = \\text{底} \\times \\text{高}', grade: '國小', topic: '幾何', tags: ['elementary', 'geometry', 'area', 'parallelogram', '國小', '幾何', '面積', '平行四邊形'], proof: '將平行四邊形的一側切割一個直角三角形並移動到另一側，可以形成一個等面積的矩形，其面積為底乘以高。' },
+            { id: 152, name: '圓面積', formula: 'A = \\pi r^2', grade: '國小', topic: '幾何', tags: ['elementary', 'geometry', 'area', 'circle', '國小', '幾何', '面積', '圓形'], proof: '圓的面積可以透過將圓分割成許多小扇形，然後將這些扇形重新排列成近似矩形來推導。當扇形數量無限增加時，這個近似矩形會變成一個長為圓周長一半 $(\\pi r)$，寬為半徑 $(r)$ 的矩形，因此面積為 $\\pi r \\times r = \\pi r^2$。' },
+            { id: 153, name: '圓周長', formula: 'C = 2 \\pi r \\text{ 或 } C = \\pi d', grade: '國小', topic: '幾何', tags: ['elementary', 'geometry', 'circumference', 'circle', '國小', '幾何', '周長', '圓形'], proof: '圓周率 $\\pi$ 定義為圓的周長與其直徑之比，即 $\\pi = C/d$。因此，周長 $C = \\pi d = 2 \\pi r$。' },
+            { id: 154, name: '比例式基本性質', formula: '\\text{若 } a:b = c:d \\text{ 則 } ad = bc', grade: '國小', topic: '代數', tags: ['elementary', 'algebra', 'ratio', 'proportion', '國小', '代數', '比例', '比例式'], proof: '比例式 $a/b = c/d$ 兩邊同乘以 $bd$ 即可得到 $ad = bc$。' },
+            { id: 155, name: '百分比計算', formula: '\\text{部分} = \\text{總數} \\times \\frac{\\text{百分比}}{100}', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'percentage', '國小', '算術', '百分比'], proof: '百分比是表示一個數是另一個數的百分之幾。例如，25% 表示 25/100。' },
+            { id: 156, name: '最大公因數 (GCD)', formula: '\\text{GCD}(a,b)', grade: '國小', topic: '數論', tags: ['elementary', 'number theory', 'gcd', '國小', '數論', '最大公因數', '公因數'], proof: '最大公因數是兩個或多個整數共有的因數中最大的一個。可以使用列舉因數法或短除法求得。' },
+            { id: 157, name: '最小公倍數 (LCM)', formula: '\\text{LCM}(a,b)', grade: '國小', topic: '數論', tags: ['elementary', 'number theory', 'lcm', '國小', '數論', '最小公倍數', '公倍數'], proof: '最小公倍數是兩個或多個整數共有的倍數中最小的一個。可以使用列舉倍數法或短除法求得。' },
+            { id: 158, name: '長方體體積', formula: 'V = \\text{長} \\times \\text{寬} \\times \\text{高}', grade: '國小', topic: '幾何', tags: ['elementary', 'geometry', 'volume', 'cuboid', '國小', '幾何', '體積', '長方體'], proof: '長方體的體積是其長、寬、高的乘積。' },
+            { id: 159, name: '正方體體積', formula: 'V = \\text{邊長}^3 = s^3', grade: '國小', topic: '幾何', tags: ['elementary', 'geometry', 'volume', 'cube', '國小', '幾何', '體積', '正方體'], proof: '正方體是特殊的長方體，其長、寬、高相等，因此體積是邊長的三次方。' },
+            { id: 160, name: '分數加減 (同分母)', formula: '\\frac{a}{c} \\pm \\frac{b}{c} = \\frac{a \\pm b}{c}', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'fraction', 'addition', 'subtraction', '國小', '算術', '分數', '加法', '減法'], proof: '當分母相同時，直接對分子進行加減運算，分母不變。' },
+            { id: 161, name: '分數乘法', formula: '\\frac{a}{b} \\times \\frac{c}{d} = \\frac{ac}{bd}', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'fraction', 'multiplication', '國小', '算術', '分數', '乘法'], proof: '分數乘法是分子相乘作分子，分母相乘作分母。' },
+            { id: 162, name: '分數除法', formula: '\\frac{a}{b} \\div \\frac{c}{d} = \\frac{a}{b} \\times \\frac{d}{c} = \\frac{ad}{bc}', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'fraction', 'division', '國小', '算術', '分數', '除法'], proof: '分數除法是除以一個分數等於乘以其倒數。' },
+            { id: 163, name: '時間換算', formula: '\\text{1 小時} = 60 \\text{ 分鐘}, \\text{1 分鐘} = 60 \\text{ 秒}', grade: '國小', topic: '其他', tags: ['elementary', 'unit conversion', 'time', '國小', '單位換算', '時間'], proof: '這是時間單位的定義。' },
+            { id: 164, name: '長度換算', formula: '\\text{1 公尺} = 100 \\text{ 公分}, \\text{1 公里} = 1000 \\text{ 公尺}', grade: '國小', topic: '其他', tags: ['elementary', 'unit conversion', 'length', '國小', '單位換算', '長度'], proof: '這是長度單位的定義。' },
+            { id: 165, name: '重量換算', formula: '\\text{1 公斤} = 1000 \\text{ 公克}', grade: '國小', topic: '其他', tags: ['elementary', 'unit conversion', 'weight', '國小', '單位換算', '重量'], proof: '這是重量單位的定義。' },
+            { id: 166, name: '除法基本概念', formula: '\\text{被除數} = \\text{除數} \\times \\text{商} + \\text{餘數}', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'division', '國小', '算術', '除法'], proof: '除法是乘法的逆運算，表示將一個數分成若干等份。' },
+            { id: 167, name: '平均數 (簡單)', formula: '\\text{平均數} = \\frac{\\text{總和}}{\\text{數量}}', grade: '國小', topic: '機率與統計', tags: ['elementary', 'statistics', 'average', 'mean', '國小', '統計', '平均'], proof: '平均數是將所有數據加總後，除以數據的個數。' },
+            { id: 168, name: '面積單位換算', formula: '\\text{1 平方公尺} = 10000 \\text{ 平方公分}', grade: '國小', topic: '其他', tags: ['elementary', 'unit conversion', 'area', '國小', '單位換算', '面積'], proof: '1 公尺 = 100 公分，所以 1 平方公尺 = $(100 \\text{ 公分}) \\times (100 \\text{ 公分}) = 10000 \\text{ 平方公分}$。' },
+            { id: 169, name: '體積單位換算', formula: '\\text{1 立方公尺} = 1000000 \\text{ 立方公分}', grade: '國小', topic: '其他', tags: ['elementary', 'unit conversion', 'volume', '國小', '單位換算', '體積'], proof: '1 公尺 = 100 公分，所以 1 立方公尺 = $(100 \\text{ 公分})^3 = 1000000 \\text{ 立方公分}$。' },
+            { id: 170, name: '分數的等值', formula: '\\frac{a}{b} = \\frac{a \\times k}{b \\times k}', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'fraction', 'equivalent fractions', '國小', '算術', '分數', '等值分數'], proof: '分子和分母同時乘以或除以一個非零數，分數的值不變。' },
+            { id: 171, name: '數線概念', formula: '\\text{數字在數線上的位置與大小關係}', grade: '國小', topic: '數論', tags: ['elementary', 'number line', 'integers', '國小', '數線', '整數'], proof: '數線是一種視覺化數字大小和順序的方法。' },
+            { id: 172, name: '四則運算順序', formula: '\\text{先乘除後加減，有括號先算括號內}', grade: '國小', topic: '代數', tags: ['elementary', 'arithmetic', 'order of operations', '國小', '算術', '運算順序'], proof: '這是數學運算中約定俗成的規則，確保運算結果的唯一性。' },
+            { id: 200, name: '畢氏定理', formula: 'a^2 + b^2 = c^2', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'pythagorean theorem', 'right triangle', '國中', '幾何', '畢氏定理', '直角三角形'], proof: '在直角三角形中，兩股長的平方和等於斜邊長的平方。證明方法有多種，例如透過面積切割或相似三角形。' },
+            { id: 201, name: '一元二次方程式解', formula: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'quadratic equation', 'quadratic formula', '國中', '代數', '一元二次方程式', '公式解'], proof: '透過配方法推導：將 $ax^2 + bx + c = 0$ 兩邊同除以 $a$，再將常數項移到右邊，然後兩邊加上 $(b/2a)^2$ 完成左邊的平方，最後開根號並移項即可得到公式解。' },
+            { id: 202, name: '平方差公式', formula: 'a^2 - b^2 = (a - b)(a + b)', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'factorization', '國中', '代數', '因式分解', '乘法公式', '平方差'], proof: '將右邊展開：$(a - b)(a + b) = a(a + b) - b(a + b) = a^2 + ab - ba - b^2 = a^2 - b^2$。' },
+            { id: 203, name: '完全平方公式 (和)', formula: '(a + b)^2 = a^2 + 2ab + b^2', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'expansion', '國中', '代數', '展開', '乘法公式', '完全平方'], proof: '將 $(a + b)^2$ 展開為 $(a + b)(a + b) = a(a + b) + b(a + b) = a^2 + ab + ba + b^2 = a^2 + 2ab + b^2$。' },
+            { id: 204, name: '完全平方公式 (差)', formula: '(a - b)^2 = a^2 - 2ab + b^2', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'expansion', '國中', '代數', '展開', '乘法公式', '完全平方'], proof: '將 $(a - b)^2$ 展開為 $(a - b)(a - b) = a(a - b) - b(a - b) = a^2 - ab - ba + b^2 = a^2 - 2ab + b^2$。' },
+            { id: 205, name: '等差數列第n項', formula: 'a_n = a_1 + (n - 1)d', grade: '國中', topic: '數列與級數', tags: ['junior high', 'sequence', 'arithmetic progression', '國中', '數列', '等差數列'], proof: '等差數列的每一項都比前一項多一個公差 $d$。從第一項 $a_1$ 開始，第 $n$ 項需要加上 $(n-1)$ 個公差。' },
+            { id: 206, name: '等差級數和', formula: 'S_n = \\frac{n(a_1 + a_n)}{2} \\text{ 或 } S_n = \\frac{n[2a_1 + (n - 1)d]}{2}', grade: '國中', topic: '數列與級數', tags: ['junior high', 'series', 'arithmetic series', '國中', '級數', '等差級數'], proof: '將等差級數正向和反向寫出，相加後會發現每對和都相等，共 $n$ 對，因此總和是 $n \\times (a_1 + a_n)$ 的一半。' },
+            { id: 207, name: '中位數', formula: '\\text{排序後中間的值}', grade: '國中', topic: '機率與統計', tags: ['junior high', 'statistics', 'median', '國中', '統計', '中位數'], proof: '中位數是將一組數據按大小順序排列後，位於最中間的數。如果數據個數為偶數，則中位數是中間兩個數的平均值。' },
+            { id: 208, name: '平均數', formula: '\\bar{x} = \\frac{\\sum x_i}{n}', grade: '國中', topic: '機率與統計', tags: ['junior high', 'statistics', 'mean', '國中', '統計', '平均數'], proof: '平均數是所有數據值的總和除以數據的個數。' },
+            { id: 209, name: '眾數', formula: '\\text{出現次數最多的值}', grade: '國中', topic: '機率與統計', tags: ['junior high', 'statistics', 'mode', '國中', '統計', '眾數'], proof: '眾數是一組數據中出現次數最多的數值。一組數據可能有一個眾數、多個眾數或沒有眾數。' },
+            { id: 210, name: '機率基本公式', formula: 'P(A) = \\frac{\\text{事件A發生的次數}}{\\text{所有可能發生的總次數}}', grade: '國中', topic: '機率與統計', tags: ['junior high', 'probability', '國中', '機率'], proof: '機率的定義，表示一個事件在所有可能結果中所佔的比例。' },
+            { id: 211, name: '圓心角與圓周角關係', formula: '\\text{圓心角} = 2 \\times \\text{圓周角}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'circle', 'angle', '國中', '幾何', '圓', '圓心角', '圓周角'], proof: '圓周角定理：在同圓或等圓中，同弧所對的圓周角是圓心角的一半。證明通常涉及分類討論圓心位置。' },
+            { id: 212, name: '扇形面積', formula: 'A = \\frac{\\theta}{360^{\\circ}} \\times \\pi r^2 \\text{ (角度制)} \\text{ 或 } A = \\frac{1}{2} r^2 \\theta \\text{ (弧度制)}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'sector', 'area', '國中', '幾何', '扇形', '面積'], proof: '扇形面積是圓面積的一部分，其比例由圓心角佔圓周角的比例決定。' },
+            { id: 213, name: '弧長', formula: 'L = \\frac{\\theta}{360^{\\circ}} \\times 2 \\pi r \\text{ (角度制)} \\text{ 或 } L = r \\theta \\text{ (弧度制)}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'arc length', 'circle', '國中', '幾何', '弧長', '圓'], proof: '弧長是圓周長的一部分，其比例由圓心角佔圓周角的比例決定。' },
+            { id: 214, name: '直角坐標系兩點距離', formula: 'd = \\sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'coordinate geometry', 'distance formula', '國中', '幾何', '坐標幾何', '距離公式', '兩點距離'], proof: '利用畢氏定理，將兩點的水平距離 $(x_2 - x_1)$ 和垂直距離 $(y_2 - y_1)$ 作為直角三角形的兩股，兩點間的距離即為斜邊。' },
+            { id: 215, name: '直線斜率', formula: 'm = \\frac{y_2 - y_1}{x_2 - x_1}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'coordinate geometry', 'slope', '國中', '幾何', '坐標幾何', '斜率', '直線'], proof: '斜率定義為垂直變化量（y的變化）與水平變化量（x的變化）之比。' },
+            { id: 216, name: '等比數列第n項', formula: 'a_n = a_1 r^{n-1}', grade: '國中', topic: '數列與級數', tags: ['junior high', 'sequence', 'geometric progression', '國中', '數列', '等比數列'], proof: '等比數列的每一項都比前一項多乘以一個公比 $r$。從第一項 $a_1$ 開始，第 $n$ 項需要乘以 $(n-1)$ 個公比。' },
+            { id: 217, name: '等比級數和', formula: 'S_n = \\frac{a_1(1 - r^n)}{1 - r} \\text{ (當 } r \\neq 1) \\text{ 或 } S_n = na_1 \\text{ (當 } r = 1)', grade: '國中', topic: '數列與級數', tags: ['junior high', 'series', 'geometric series', '國中', '級數', '等比級數'], proof: '透過錯位相減法推導：將等比級數 $S_n$ 乘以公比 $r$ 得到 $rS_n$，然後 $S_n - rS_n$ 即可消去中間項。' },
+            { id: 218, name: '因數與倍數', formula: '\\text{若 } a = kb \\text{，則 } b \\text{ 是 } a \\text{ 的因數，} a \\text{ 是 } b \\text{ 的倍數}', grade: '國中', topic: '數論', tags: ['junior high', 'number theory', 'factor', 'multiple', '國中', '數論', '因數', '倍數'], proof: '因數與倍數是整數除法的基本概念。' },
+            { id: 219, name: '絕對值定義', formula: '|x| = \\begin{cases} x & \\text{若 } x \\ge 0 \\\\ -x & \\text{若 } x < 0 \\end{cases}', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'absolute value', '國中', '代數', '絕對值'], proof: '絕對值表示一個數到原點的距離，因此是非負的。' },
+            { id: 220, name: '解聯立方程式 (加減消去法)', formula: '\\text{透過係數相加減，消去其中一個變數}', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'system of equations', 'elimination method', '國中', '代數', '聯立方程式', '加減消去法'], proof: '加減消去法是利用等量公理，將兩個方程式相加或相減，以消除一個變數，從而簡化問題。' },
+            { id: 221, name: '解聯立方程式 (代入消去法)', formula: '\\text{從一個方程式表達一個變數，代入另一個方程式}', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'system of equations', 'substitution method', '國中', '代數', '聯立方程式', '代入消去法'], proof: '代入消去法是將一個方程式中的變數用另一個方程式的表達式替換，從而減少變數的數量。' },
+            { id: 222, name: '多邊形外角和', formula: '\\text{任意凸多邊形的外角和為 } 360^{\\circ}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'polygon', 'exterior angles', '國中', '幾何', '多邊形', '外角和'], proof: '每個內角與其相應外角之和為 $180^{\\circ}$。$n$ 邊形的內角和為 $(n-2) \\times 180^{\\circ}$。因此，外角和為 $n \\times 180^{\\circ} - (n-2) \\times 180^{\\circ} = 2 \\times 180^{\\circ} = 360^{\\circ}$。' },
+            { id: 223, name: '圓柱表面積', formula: 'A = 2\\pi r^2 + 2\\pi r h', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'surface area', 'cylinder', '國中', '幾何', '表面積', '圓柱'], proof: '圓柱的表面積由兩個圓形底面面積 ($2\\pi r^2$) 和一個矩形側面面積 ($2\\pi r h$) 組成。' },
+            { id: 224, name: '圓錐表面積', formula: 'A = \\pi r^2 + \\pi r l \\text{ (其中 } l \\text{ 為斜高)}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'surface area', 'cone', '國中', '幾何', '表面積', '圓錐'], proof: '圓錐的表面積由一個圓形底面面積 ($\\pi r^2$) 和一個扇形側面面積 ($\\pi r l$) 組成。' },
+            { id: 225, name: '機率 (互斥事件)', formula: 'P(A \\cup B) = P(A) + P(B) \\text{ (若 } A \\cap B = \\emptyset)', grade: '國中', topic: '機率與統計', tags: ['junior high', 'probability', 'mutually exclusive events', '國中', '機率', '互斥事件'], proof: '當兩個事件互斥時，它們不能同時發生，因此它們並集的機率是各自機率的和。' },
+            { id: 226, name: '全等三角形判斷 (SSS)', formula: '\\text{若三個邊長分別相等，則兩三角形全等}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'congruent triangles', 'SSS', '國中', '幾何', '全等三角形'], proof: 'SSS 全等定理：三邊對應相等的兩個三角形全等。' },
+            { id: 227, name: '全等三角形判斷 (SAS)', formula: '\\text{若兩邊及夾角分別相等，則兩三角形全等}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'congruent triangles', 'SAS', '國中', '幾何', '全等三角形'], proof: 'SAS 全等定理：兩邊及其夾角對應相等的兩個三角形全等。' },
+            { id: 228, name: '全等三角形判斷 (ASA)', formula: '\\text{若兩角及夾邊分別相等，則兩三角形全等}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'congruent triangles', 'A SA', '國中', '幾何', '全等三角形'], proof: 'ASA 全等定理：兩角及其夾邊對應相等的兩個三角形全等。' },
+            { id: 229, name: '全等三角形判斷 (AAS)', formula: '\\text{若兩角及其中一角的對邊分別相等，則兩三角形全等}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'congruent triangles', 'AAS', '國中', '幾何', '全等三角形'], proof: 'AAS 全等定理：兩角及其一角的對邊對應相等的兩個三角形全等。' },
+            { id: 230, name: '相似三角形判斷 (AA)', formula: '\\text{若兩角分別相等，則兩三角形相似}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'similar triangles', 'AA', '國中', '幾何', '相似三角形'], proof: 'AA 相似定理：兩角對應相等的兩個三角形相似。' },
+            { id: 231, name: '相似三角形判斷 (SSS)', formula: '\\text{若三邊成比例，則兩三角形相似}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'similar triangles', 'SSS', '國中', '幾何', '相似三角形'], proof: 'SSS 相似定理：三邊對應成比例的兩個三角形相似。' },
+            { id: 232, name: '相似三角形判斷 (SAS)', formula: '\\text{若兩邊成比例且夾角相等，則兩三角形相似}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'similar triangles', 'SAS', '國中', '幾何', '相似三角形'], proof: 'SAS 相似定理：兩邊對應成比例且夾角對應相等的兩個三角形相似。' },
+            { id: 233, name: '分數指數律', formula: 'a^{m/n} = \\sqrt[n]{a^m} = (\\sqrt[n]{a})^m', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'exponent rules', 'fractional exponents', '國中', '代數', '指數律', '分數指數'], proof: '分數指數是根式的另一種寫法，定義為 $a^{m/n}$ 是 $a^m$ 的 $n$ 次方根。' },
+            { id: 234, name: '零指數律', formula: 'a^0 = 1 \\text{ (當 } a \\neq 0)', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'exponent rules', 'zero exponent', '國中', '代數', '指數律', '零指數'], proof: '根據指數律 $a^m / a^n = a^{m-n}$，當 $m=n$ 時，有 $a^m / a^m = a^{m-m} = a^0$。同時 $a^m / a^m = 1$，所以 $a^0 = 1$。' },
+            { id: 235, name: '負指數律', formula: 'a^{-n} = \\frac{1}{a^n}', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'exponent rules', 'negative exponent', '國中', '代數', '指數律', '負指數'], proof: '根據指數律 $a^m / a^n = a^{m-n}$，當 $m=0$ 時，有 $a^0 / a^n = a^{-n}$。同時 $a^0 / a^n = 1 / a^n$，所以 $a^{-n} = 1 / a^n$。' },
+            { id: 236, name: '科學記號', formula: 'a \\times 10^n \\text{ (其中 } 1 \\le |a| < 10, n \\text{ 為整數)}', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'scientific notation', '國中', '代數', '科學記號'], proof: '科學記號是一種表示非常大或非常小的數的方法，它利用了十的冪次。' },
+            { id: 237, name: '立方和公式', formula: 'a^3 + b^3 = (a+b)(a^2 - ab + b^2)', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'factorization', '國中', '代數', '因式分解', '乘法公式', '立方和'], proof: '將右邊展開即可證明。' },
+            { id: 238, name: '立方差公式', formula: 'a^3 - b^3 = (a-b)(a^2 + ab + b^2)', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'factorization', '國中', '代數', '因式分解', '乘法公式', '立方差'], proof: '將右邊展開即可證明。' },
+            { id: 239, name: '立方和完全公式', formula: '(a+b)^3 = a^3 + 3a^2b + 3ab^2 + b^3', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'expansion', '國中', '代數', '展開', '乘法公式', '完全立方'], proof: '將 $(a+b)^3 = (a+b)(a+b)^2 = (a+b)(a^2+2ab+b^2)$ 展開即可證明。' },
+            { id: 240, name: '立方差完全公式', formula: '(a-b)^3 = a^3 - 3a^2b + 3ab^2 - b^3', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'expansion', '國中', '代數', '展開', '乘法公式', '完全立方'], proof: '將 $(a-b)^3 = (a-b)(a-b)^2 = (a-b)(a^2-2ab+b^2)$ 展開即可證明。' },
+            { id: 241, name: '多項式加減', formula: '\\text{同類項合併}', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'polynomial', 'addition', 'subtraction', '國中', '代數', '多項式', '加法', '減法'], proof: '多項式的加減法是將相同變數和次數的項（同類項）的係數相加減。' },
+            { id: 242, name: '多項式乘法', formula: '\\text{每個項與另一個多項式的每個項相乘}', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'polynomial', 'multiplication', '國中', '代數', '多項式', '乘法'], proof: '多項式乘法是利用分配律將一個多項式的每一項與另一個多項式的每一項相乘，然後合併同類項。' },
+            { id: 243, name: '十字交乘法', formula: '\\text{用於二次三項式因式分解}', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'factorization', 'cross multiplication', '國中', '代數', '因式分解'], proof: '十字交乘法是一種將形如 $ax^2 + bx + c$ 的二次三項式分解為兩個一次因式乘積的方法，透過試湊係數來實現。' },
+            { id: 244, name: '根號運算 (乘法)', formula: '\\sqrt{a} \\times \\sqrt{b} = \\sqrt{ab}', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'radical', 'multiplication', '國中', '代數', '根號', '乘法'], proof: '根據根號的定義，平方根的乘積等於乘積的平方根。' },
+            { id: 245, name: '根號運算 (除法)', formula: '\\frac{\\sqrt{a}}{\\sqrt{b}} = \\sqrt{\\frac{a}{b}}', grade: '國中', topic: '代數', tags: ['junior high', 'algebra', 'radical', 'division', '國中', '代數', '根號', '除法'], proof: '根據根號的定義，平方根的商等於商的平方根。' },
+            { id: 246, name: '直線方程式 (兩點式)', formula: '\\frac{y - y_1}{x - x_1} = \\frac{y_2 - y_1}{x_2 - x_1}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'coordinate geometry', 'line equation', 'two-point form', '國中', '幾何', '坐標幾何', '直線', '兩點式'], proof: '兩點式是利用直線斜率的概念，當已知直線上兩點時，可以建立方程式。' },
+            { id: 247, name: '圓的切線性質', formula: '\\text{圓的切線垂直於過切點的半徑}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'circle', 'tangent', '國中', '幾何', '圓', '切線'], proof: '切線是只與圓相交於一點的直線。其垂直性質可以透過極限或對稱性證明。' },
+            { id: 248, name: '機率 (獨立事件)', formula: 'P(A \\text{ 和 } B) = P(A) \\times P(B)', grade: '國中', topic: '機率與統計', tags: ['junior high', 'probability', 'independent events', '國中', '機率', '獨立事件'], proof: '當兩個事件獨立時，一個事件的發生不影響另一個事件發生的機率，它們同時發生的機率是各自機率的乘積。' },
+            { id: 249, name: '統計圖表概念', formula: '\\text{長條圖、圓形圖、折線圖、盒狀圖等}', grade: '國中', topic: '機率與統計', tags: ['junior high', 'statistics', 'charts', 'graphs', '國中', '統計', '圖表'], proof: '統計圖表是視覺化數據的方法，用於呈現數據分佈、趨勢和關係。' },
+            { id: 250, name: '多邊形內角和', formula: '(n-2) \\times 180^{\\circ}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'polygon', 'interior angles', '國中', '幾何', '多邊形', '內角和'], proof: '將 $n$ 邊形從一個頂點連對角線，可以將其分割成 $n-2$ 個三角形，每個三角形內角和為 $180^{\\circ}$。' },
+            { id: 251, name: '圓錐體積', formula: 'V = \\frac{1}{3} \\pi r^2 h', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'volume', 'cone', '國中', '幾何', '體積', '圓錐'], proof: '圓錐體積是同底同高圓柱體積的三分之一。這可以透過積分或卡瓦列里原理證明。' },
+            { id: 252, name: '圓柱體積', formula: 'V = \\pi r^2 h', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'volume', 'cylinder', '國中', '幾何', '體積', '圓柱'], proof: '圓柱體積是底面積乘以高。' },
+            { id: 253, name: '球體積', formula: 'V = \\frac{4}{3} \\pi r^3', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'volume', 'sphere', '國中', '幾何', '體積', '球體'], proof: '球體積的證明通常涉及積分（圓盤法或殼層法）。' },
+            { id: 254, name: '球表面積', formula: 'A = 4 \\pi r^2', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'surface area', 'sphere', '國中', '幾何', '表面積', '球體'], proof: '球表面積的證明通常涉及積分。' },
+            { id: 255, name: '弧度與角度換算', formula: '\\pi \\text{ 弧度} = 180^{\\circ}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'radian', 'degree', '國中', '幾何', '弧度', '角度'], proof: '弧度定義為圓心角所對弧長與半徑之比。一個圓的周長為 $2\\pi r$，所以整個圓的弧度為 $2\\pi r / r = 2\\pi$ 弧度，對應 $360^{\\circ}$。' },
+            { id: 256, name: '中心點公式', formula: 'M = (\\frac{x_1+x_2}{2}, \\frac{y_1+y_2}{2})', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'midpoint', '國中', '幾何', '中點'], proof: '中心點是連接兩點線段的中點，其坐標是兩點坐標的平均值。' },
+            { id: 257, name: '排列組合乘法原理', formula: '\\text{總方法數} = N_1 \\times N_2 \\times ... \\times N_k', grade: '國中', topic: '機率與統計', tags: ['junior high', 'probability', 'counting principle', 'multiplication principle', '國中', '機率', '計數原理', '乘法原理'], proof: '如果一個事件可以分解為 $k$ 個步驟，每個步驟有 $N_i$ 種方法，則總方法數為所有步驟方法數的乘積。' },
+            { id: 258, name: '排列組合加法原理', formula: '\\text{總方法數} = N_1 + N_2 + ... + N_k', grade: '國中', topic: '機率與統計', tags: ['junior high', 'probability', 'counting principle', 'addition principle', '國中', '機率', '計數原理', '加法原理'], proof: '如果一個事件可以透過 $k$ 種互斥的方式完成，每種方式有 $N_i$ 種方法，則總方法數為所有方式方法數的總和。' },
+            { id: 259, name: '歐幾里得演算法 (輾轉相除法)', formula: '\\text{gcd}(a, b) = \\text{gcd}(b, a \\pmod b)', grade: '國中', topic: '數論', tags: ['junior high', 'number theory', 'Euclidean algorithm', 'gcd', '國中', '數論', '歐幾里得演算法', '輾轉相除法'], proof: '歐幾里得演算法用於計算兩個整數的最大公因數。其原理是兩個數的最大公因數等於其中較小的數與兩數相除餘數的最大公因數。' },
+            { id: 260, name: '質因數分解', formula: '\\text{任何大於1的整數都可以唯一地表示為質數的乘積}', grade: '國小', topic: '數論', tags: ['elementary', 'number theory', 'prime factorization', '國小', '數論', '質因數分解', '質數'], proof: '這是算術基本定理，證明涉及反證法。' },
+            { id: 261, name: '質數定義', formula: '\\text{大於1的自然數，除了1和本身外，不能被其他自然數整除}', grade: '國小', topic: '數論', tags: ['elementary', 'number theory', 'prime number', '國小', '數論', '質數'], proof: '這是質數的基本定義。' },
+            { id: 300, name: '指數律', formula: 'a^m \\cdot a^n = a^{m+n}, (a^m)^n = a^{mn}, (ab)^n = a^n b^n', grade: '高中', topic: '代數', tags: ['high school', 'algebra', 'exponent rules', '高中', '代數', '指數', '指數律'], proof: '指數律是基於乘法定義的延伸。例如 $a^m \\cdot a^n = (a \\cdot ... \\cdot a \\text{ (m次)}) \\cdot (a \\cdot ... \\cdot a \\text{ (n次)}) = a \\cdot ... \\cdot a \\text{ (m+n次)} = a^{m+n}$。其他類似。' },
+            { id: 301, name: '對數律', formula: '\\log_b (MN) = \\log_b M + \\log_b N, \\log_b (M/N) = \\log_b M - \\log_b N, \\log_b (M^p) = p \\log_b M', grade: '高中', topic: '代數', tags: ['high school', 'algebra', 'logarithm rules', '高中', '代數', '對數', '對數律'], proof: '對數律是指數律的逆運算。例如，令 $x = \\log_b M$ 和 $y = \\log_b N$，則 $M = b^x$ 和 $N = b^y$。所以 $MN = b^x b^y = b^{x+y}$，取對數得到 $\\log_b (MN) = x + y = \\log_b M + \\log_b N$。' },
+            { id: 302, name: '換底公式', formula: '\\log_b a = \\frac{\\log_c a}{\\log_c b}', grade: '高中', topic: '代數', tags: ['high school', 'algebra', 'logarithm', 'change of base', '高中', '代數', '對數', '換底'], proof: '令 $x = \\log_b a$，則 $b^x = a$。兩邊取以 $c$ 為底的對數：$\\log_c (b^x) = \\log_c a \\Rightarrow x \\log_c b = \\log_c a \\Rightarrow x = \\frac{\\log_c a}{\\log_c b}$。' },
+            { id: 303, name: '三角函數定義 (直角三角形)', formula: '\\sin \\theta = \\frac{\\text{對邊}}{\\text{斜邊}}, \\cos \\theta = \\frac{\\text{鄰邊}}{\\text{斜邊}}, \\tan \\theta = \\frac{\\text{對邊}}{\\text{鄰邊}}', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'right triangle', '高中', '三角函數', '直角三角形', '定義'], proof: '這些是三角函數在直角三角形中的基本定義。' },
+            { id: 304, name: '正弦定理', formula: '\\frac{a}{\\sin A} = \\frac{b}{\\sin B} = \\frac{c}{\\sin C} = 2R', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'sine rule', '高中', '三角函數', '正弦定理'], proof: '透過構造三角形的外接圓，並利用圓周角定理和直角三角形的三角函數定義來證明。' },
+            { id: 305, name: '餘弦定理', formula: 'c^2 = a^2 + b^2 - 2ab \\cos C', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'cosine rule', '高中', '三角函數', '餘弦定理'], proof: '透過在三角形中作高，將其分成兩個直角三角形，然後利用畢氏定理和三角函數進行代數推導。' },
+            { id: 306, name: '三角形面積 (三角函數)', formula: 'A = \\frac{1}{2}ab \\sin C', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'area', 'triangle', '高中', '三角函數', '面積', '三角形'], proof: '將三角形的高表示為 $h = a \\sin C$，代入三角形面積公式 $A = \\frac{1}{2} \\text{底} \\times \\text{高}$ 即可。' },
+            { id: 307, name: '和角公式', formula: '\\sin(A+B) = \\sin A \\cos B + \\cos A \\sin B \\\\ \\cos(A+B) = \\cos A \\cos B - \\sin A \\sin B', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'sum formula', '高中', '三角函數', '和角'], proof: '和角公式的證明通常涉及單位圓上的幾何構造或向量法。' },
+            { id: 308, name: '差角公式', formula: '\\sin(A-B) = \\sin A \\cos B - \\cos A \\sin B \\\\ \\cos(A-B) = \\cos A \\cos B + \\sin A \\sin B', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'difference formula', '高中', '三角函數', '差角'], proof: '從和角公式中將 $B$ 替換為 $-B$ 並利用三角函數的奇偶性即可推導。' },
+            { id: 309, name: '二倍角公式', formula: '\\sin(2A) = 2 \\sin A \\cos A \\\\ \\cos(2A) = \\cos^2 A - \\sin^2 A = 2 \\cos^2 A - 1 = 1 - 2 \\sin^2 A', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'double angle', '高中', '三角函數', '二倍角'], proof: '從和角公式中將 $B$ 設為 $A$ 即可推導。' },
+            { id: 310, name: '數列極限', formula: '\\lim_{n \\to \\infty} a_n = L', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'limit', 'sequence', '高中', '微積分', '極限', '數列'], proof: '數列極限的嚴格定義 ($\\epsilon-N$ 定義) 為：對於任意 $\\epsilon > 0$，存在一個正整數 $N$，使得當 $n > N$ 時，有 $|a_n - L| < \\epsilon$。' },
+            { id: 311, name: '函數極限', formula: '\\lim_{x \\to c} f(x) = L', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'limit', 'function', '高中', '微積分', '極限', '函數'], proof: '函數極限的嚴格定義 ($\\epsilon-\\delta$ 定義) 為：對於任意 $\\epsilon > 0$，存在一個 $\\delta > 0$，使得當 $0 < |x - c| < \\delta$ 時，有 $|f(x) - L| < \\epsilon$。' },
+            { id: 312, name: '導數定義', formula: 'f\'(x) = \\lim_{h \\to 0} \\frac{f(x+h) - f(x)}{h}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'derivative', '高中', '微積分', '導數', '微分'], proof: '導數定義為函數在某一點的瞬時變化率，即割線斜率在 $h \\to 0$ 時的極限。' },
+            { id: 313, name: '基本微分法則 (冪次)', formula: '\\frac{d}{dx}(x^n) = nx^{n-1}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'differentiation', 'power rule', '高中', '微積分', '微分', '冪次法則'], proof: '透過導數定義和二項式定理展開 $(x+h)^n$ 即可證明。' },
+            { id: 314, name: '基本積分法則 (冪次)', formula: '\\int x^n dx = \\frac{x^{n+1}}{n+1} + C \\text{ (當 } n \\neq -1)', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'integration', 'power rule', '高中', '微積分', '積分', '冪次法則'], proof: '積分是微分的逆運算。對 $\\frac{x^{n+1}}{n+1} + C$ 求導即可得到 $x^n$。' },
+            { id: 315, name: '排列數', formula: 'P(n, k) = \\frac{n!}{(n-k)!}', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'combinatorics', 'permutation', '高中', '機率', '組合學', '排列'], proof: '從 $n$ 個不同元素中取出 $k$ 個元素進行排列，第一個位置有 $n$ 種選擇，第二個有 $n-1$ 種，以此類推，直到第 $k$ 個位置有 $n-k+1$ 種選擇。乘起來即為 $n(n-1)...(n-k+1) = n!/(n-k)!$。' },
+            { id: 316, name: '組合數', formula: 'C(n, k) = \\binom{n}{k} = \\frac{n!}{k!(n-k)!}', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'combinatorics', 'combination', '高中', '機率', '組合學', '組合'], proof: '組合數是從 $n$ 個不同元素中取出 $k$ 個元素組成一個集合的方法數。由於 $k$ 個元素的排列有 $k!$ 種，所以組合數等於排列數除以 $k!$。' },
+            { id: 317, name: '二項式定理', formula: '(x + y)^n = \\sum_{k=0}^{n} \\binom{n}{k} x^{n-k} y^k', grade: '高中', topic: '代數', tags: ['high school', 'algebra', 'binomial theorem', '高中', '代數', '二項式定理'], proof: '二項式定理的證明可以透過數學歸納法或組合論證 (從 $(x+y)^n$ 的展開式中選擇 $k$ 個 $y$ 和 $n-k$ 個 $x$ 的方式數) 來完成。' },
+            { id: 318, name: '期望值 (離散)', formula: 'E(X) = \\sum x_i P(X=x_i)', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'statistics', 'expected value', 'discrete', '高中', '機率', '統計', '期望值', '離散'], proof: '期望值是隨機變數所有可能取值與其對應機率的乘積之和，表示隨機變數的平均值。' },
+            { id: 319, name: '變異數 (離散)', formula: '\\text{Var}(X) = E[(X - E(X))^2] = E(X^2) - [E(X)]^2', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'statistics', 'variance', 'discrete', '高中', '機率', '統計', '變異數', '離散'], proof: '變異數衡量隨機變數與其期望值之間的離散程度。展開 $E[(X - E(X))^2]$ 即可得到第二種形式。' },
+            { id: 320, name: '標準差', formula: '\\sigma_X = \\sqrt{\\text{Var}(X)}', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'statistics', 'standard deviation', '高中', '機率', '統計', '標準差'], proof: '標準差是變異數的平方根，與原始數據具有相同的單位，更直觀地表示數據的離散程度。' },
+            { id: 321, name: '算幾不等式', formula: '\\frac{a_1 + a_2 + ... + a_n}{n} \\ge \\sqrt[n]{a_1 a_2 ... a_n} \\text{ (當 } a_i \\ge 0)', grade: '高中', topic: '不等式', tags: ['high school', 'inequality', 'AM-GM inequality', '高中', '不等式', '算幾不等式'], proof: '算幾不等式有多種證明方法，包括數學歸納法、凸函數性質等。最常見的證明是利用數學歸納法或柯西不等式。' },
+            { id: 322, name: '柯西不等式', formula: '(\\sum_{i=1}^n a_i b_i)^2 \\le (\\sum_{i=1}^n a_i^2) (\\sum_{i=1}^n b_i^2)', grade: '高中', topic: '不等式', tags: ['high school', 'inequality', 'Cauchy-Schwarz inequality', '高中', '不等式', '柯西不等式'], proof: '柯西不等式可以透過向量內積的性質或二次函數的判別式來證明。' },
+            { id: 323, name: '向量內積', formula: '\\vec{a} \\cdot \\vec{b} = |\\vec{a}||\\vec{b}| \\cos \\theta \\text{ 或 } a_x b_x + a_y b_y + a_z b_z', grade: '高中', topic: '向量', tags: ['high school', 'vector', 'dot product', '高中', '向量', '內積'], proof: '內積的幾何定義是兩個向量長度與夾角餘弦的乘積。在坐標系中，內積是分量乘積之和。' },
+            { id: 324, name: '向量外積 (三維)', formula: '\\vec{a} \\times \\vec{b} = (a_y b_z - a_z b_y, a_z b_x - a_x b_z, a_x b_y - a_y b_x)', grade: '高中', topic: '向量', tags: ['high school', 'vector', 'cross product', '高中', '向量', '外積'], proof: '外積的定義產生一個垂直於兩個原始向量的向量，其大小等於兩個向量構成的平行四邊形面積。' },
+            { id: 325, name: '直線方程式 (點斜式)', formula: 'y - y_1 = m(x - x_1)', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'line equation', 'point-slope form', '高中', '解析幾何', '直線', '點斜式'], proof: '直線斜率的定義 $m = \\frac{y - y_1}{x - x_1}$ 經過移項即可得到。' },
+            { id: 326, name: '直線方程式 (斜截式)', formula: 'y = mx + b', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'line equation', 'slope-intercept form', '高中', '解析幾何', '直線', '斜截式'], proof: '當直線通過 $y$ 軸截距為 $b$ 時，即點 $(0, b)$，代入點斜式即可得到。' },
+            { id: 327, name: '直線方程式 (一般式)', formula: 'Ax + By + C = 0', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'line equation', 'general form', '高中', '解析幾何', '直線', '一般式'], proof: '所有直線都可以表示為這種形式，其中 $A, B$ 不全為零。' },
+            { id: 328, name: '點到直線距離', formula: 'd = \\frac{|Ax_0 + By_0 + C|}{\\sqrt{A^2 + B^2}}', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'distance', 'point to line', '高中', '解析幾何', '點線距離'], proof: '點到直線距離公式可以透過向量投影或幾何方法證明。' },
+            { id: 329, name: '圓方程式 (標準式)', formula: '(x - h)^2 + (y - k)^2 = r^2', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'circle equation', '高中', '解析幾何', '圓', '圓方程式'], proof: '根據圓的定義，圓上任意一點 $(x, y)$ 到圓心 $(h, k)$ 的距離都等於半徑 $r$。利用兩點距離公式即可得到。' },
+            { id: 330, name: '橢圓方程式 (標準式)', formula: '\\frac{(x-h)^2}{a^2} + \\frac{(y-k)^2}{b^2} = 1', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'ellipse equation', '高中', '解析幾何', '橢圓', '橢圓方程式'], proof: '橢圓的定義是平面上到兩個定點 (焦點) 距離之和為常數的點的軌跡。透過距離公式和代數運算可推導。' },
+            { id: 331, name: '拋物線方程式 (標準式)', formula: '(x-h)^2 = 4c(y-k) \\text{ 或 } (y-k)^2 = 4c(x-h)', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'parabola equation', '高中', '解析幾何', '拋物線', '拋物線方程式'], proof: '拋物線的定義是平面上到一個定點 (焦點) 和一條定直線 (準線) 距離相等的點的軌跡。透過距離公式和代數運算可推導。' },
+            { id: 332, name: '雙曲線方程式 (標準式)', formula: '\\frac{(x-h)^2}{a^2} - \\frac{(y-k)^2}{b^2} = 1 \\text{ 或 } \\frac{(y-k)^2}{a^2} - \\frac{(x-h)^2}{b^2} = 1', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'hyperbola equation', '高中', '解析幾何', '雙曲線', '雙曲線方程式'], proof: '雙曲線的定義是平面上到兩個定點 (焦點) 距離之差的絕對值為常數的點的軌跡。透過距離公式和代數運算可推導。' },
+            { id: 333, name: '矩陣加法', formula: '\\mathbf{A} + \\mathbf{B} = [a_{ij} + b_{ij}]', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'matrix addition', '高中', '線性代數', '矩陣', '加法'], proof: '矩陣加法定義為對應元素相加。' },
+            { id: 334, name: '矩陣乘法', formula: '(\\mathbf{AB})_{ij} = \\sum_{k=1}^n a_{ik} b_{kj}', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'matrix multiplication', '高中', '線性代數', '矩陣', '乘法'], proof: '矩陣乘法的定義是將第一個矩陣的行與第二個矩陣的列進行點積。' },
+            { id: 335, name: '行列式 (2x2)', formula: '\\det \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix} = ad - bc', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'determinant', '高中', '線性代數', '行列式'], proof: '2x2 矩陣的行列式定義。' },
+            { id: 336, name: '克拉瑪法則 (兩元一次)', formula: 'x = \\frac{\\det \\begin{pmatrix} e & b \\\\ f & d \\end{pmatrix}}{\\det \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}}, y = \\frac{\\det \\begin{pmatrix} a & e \\\\ c & f \\end{pmatrix}}{\\det \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}} \\text{ (對於 } ax+by=e, cx+dy=f)', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'Cramer\'s Rule', '高中', '線性代數', '克拉瑪法則'], proof: '克拉瑪法則是一種利用行列式求解線性方程組的方法。' },
+            { id: 337, name: '正多邊形內角和', formula: '(n-2) \\times 180^{\\circ}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'polygon', '國中', '幾何', '多邊形', '內角和'], proof: '將 $n$ 邊形從一個頂點連對角線，可以將其分割成 $n-2$ 個三角形，每個三角形內角和為 $180^{\\circ}$。' },
+            { id: 338, name: '複數的極式', formula: 'z = r(\\cos \\theta + i \\sin \\theta)', grade: '高中', topic: '複數', tags: ['high school', 'complex numbers', 'polar form', '高中', '複數', '極式'], proof: '複數 $z = x + yi$ 在複數平面上對應點 $(x, y)$。將 $x = r \\cos \\theta$ 和 $y = r \\sin \\theta$ 代入即可。' },
+            { id: 339, name: '棣美弗定理', formula: '(r(\\cos \\theta + i \\sin \\theta))^n = r^n(\\cos (n\\theta) + i \\sin (n\\theta))', grade: '高中', topic: '複數', tags: ['high school', 'complex numbers', 'De Moivre\'s Theorem', '高中', '複數', '棣美弗定理'], proof: '棣美弗定理可以透過數學歸納法證明。' },
+            { id: 340, name: '機率的加法原理', formula: 'P(A \\cup B) = P(A) + P(B) - P(A \\cap B)', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'addition rule', '高中', '機率', '加法原理'], proof: '在計算 $A$ 或 $B$ 發生的機率時，如果 $A$ 和 $B$ 有重疊部分 ($A \\cap B$)，則會被計算兩次，所以需要減去一次。' },
+            { id: 341, name: '機率的乘法原理 (獨立事件)', formula: 'P(A \\cap B) = P(A)P(B)', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'multiplication rule', 'independent events', '高中', '機率', '乘法原理', '獨立事件'], proof: '當兩個事件 $A$ 和 $B$ 獨立時，一個事件的發生不影響另一個事件發生的機率。' },
+            { id: 342, name: '條件機率', formula: 'P(A|B) = \\frac{P(A \\cap B)}{P(B)}', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'conditional probability', '高中', '機率', '條件機率'], proof: '條件機率表示在事件 $B$ 已經發生的情況下，事件 $A$ 發生的機率。' },
+            { id: 343, name: '貝氏定理', formula: 'P(A|B) = \\frac{P(B|A)P(A)}{P(B)}', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'Bayes\' Theorem', '高中', '機率', '貝氏定理'], proof: '貝氏定理是條件機率的推論，用於更新事件的機率，當有新的證據或資訊出現時。' },
+            { id: 344, name: '常態分佈 (機率密度函數)', formula: 'f(x) = \\frac{1}{\\sigma \\sqrt{2\\pi}} e^{-\\frac{1}{2}(\\frac{x-\\mu}{\\sigma})^2}', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'statistics', 'normal distribution', '高中', '機率', '統計', '常態分佈'], proof: '常態分佈的機率密度函數是透過微積分和機率論推導而來，其形狀由平均數 $\\mu$ 和標準差 $\\sigma$ 決定。' },
+            { id: 345, name: '中心極限定理', formula: '\\bar{X}_n \\xrightarrow{d} N(\\mu, \\sigma^2/n)', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'statistics', 'central limit theorem', '高中', '機率', '統計', '中心極限定理'], proof: '中心極限定理表明，大量獨立同分佈隨機變數的平均值的分佈會趨近於常態分佈，即使原始分佈不是常態分佈。證明涉及特徵函數或動差生成函數。' },
+            { id: 346, name: '微積分基本定理 (第一部分)', formula: '\\frac{d}{dx} \\int_a^x f(t) dt = f(x)', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'fundamental theorem of calculus', '高中', '微積分', '基本定理'], proof: '微積分基本定理連接了微分和積分，表明了它們是互逆運算。證明基於導數的定義。' },
+            { id: 347, name: '微積分基本定理 (第二部分)', formula: '\\int_a^b f(x) dx = F(b) - F(a) \\text{ (其中 } F\'(x) = f(x))', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'fundamental theorem of calculus', '高中', '微積分', '基本定理'], proof: '微積分基本定理的第二部分提供了一種計算定積分的方法，即找到原函數並計算其在上下限處的值之差。' },
+            { id: 348, name: '定積分的面積意義', formula: '\\int_a^b f(x) dx = \\text{函數曲線下與x軸圍成的面積}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'definite integral', 'area', '高中', '微積分', '定積分', '面積'], proof: '定積分可以被視為黎曼和的極限，即將曲線下的區域分割成無限多個小矩形，然後將它們的面積相加。' },
+            { id: 349, name: '泰勒展開式 (Maclaurin series)', formula: 'f(x) = \\sum_{n=0}^{\\infty} \\frac{f^{(n)}(a)}{n!}(x-a)^n', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'Taylor series', 'Maclaurin series', '大學', '微積分', '泰勒展開'], proof: '泰勒展開式將一個函數表示為其在某一點的導數值構成的無窮級數。證明涉及反覆微分和在該點求值。' },
+            { id: 350, name: '尤拉公式', formula: 'e^{ix} = \\cos x + i \\sin x', grade: '大學/進階', topic: '複變函數', tags: ['university', 'complex analysis', 'Euler\'s formula', '大學', '複變函數', '尤拉公式'], proof: '尤拉公式可以透過泰勒級數展開 $e^{ix}$, $\\cos x$, 和 $\\sin x$ 來證明。' },
+            { id: 351, name: '傅立葉級數 (實數形式)', formula: 'f(x) = \\frac{a_0}{2} + \\sum_{n=1}^{\\infty} (a_n \\cos(\\frac{n\\pi x}{L}) + b_n \\sin(\\frac{n\\pi x}{L}))', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'Fourier series', '大學', '微分方程', '傅立葉級數'], proof: '傅立葉級數將週期函數表示為一系列正弦和餘弦函數的和。證明涉及函數的正交性。' },
+            { id: 352, name: '拉普拉斯轉換', formula: '\\mathcal{L}\\{f(t)\\} = F(s) = \\int_0^{\\infty} e^{-st} f(t) dt', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'Laplace transform', '大學', '微分方程', '拉普拉斯轉換'], proof: '拉普拉斯轉換是一種積分轉換，將函數從時域轉換到頻域，常用於求解微分方程。' },
+            { id: 353, name: '格林定理', formula: '\\oint_C (L dx + M dy) = \\iint_D (\\frac{\\partial M}{\\partial x} - \\frac{\\partial L}{\\partial y}) dA', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'Green\'s Theorem', '大學', '微積分', '格林定理'], proof: '格林定理將二維平面上的線積分與雙重積分聯繫起來，是斯托克斯定理的一個特例。' },
+            { id: 354, name: '高斯散度定理', formula: '\\iint_S \\mathbf{F} \\cdot d\\mathbf{S} = \\iiint_V (\\nabla \\cdot \\mathbf{F}) dV', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'divergence theorem', 'Gauss\'s Theorem', '大學', '微積分', '散度定理', '高斯定理'], proof: '高斯散度定理將向量場通過閉合曲面的通量與向量場的散度在曲面所圍體積上的三重積分聯繫起來。' },
+            { id: 355, name: '斯托克斯定理', formula: '\\oint_C \\mathbf{F} \\cdot d\\mathbf{r} = \\iint_S (\\nabla \\times \\mathbf{F}) \\cdot d\\mathbf{S}', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'Stokes\' Theorem', '大學', '微積分', '斯托克斯定理'], proof: '斯托克斯定理將向量場的線積分與其旋度在曲面上的面積分聯繫起來。' },
+            { id: 356, name: '特徵值與特徵向量', formula: '\\mathbf{Av} = \\lambda \\mathbf{v}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'eigenvalue', 'eigenvector', '大學', '線性代數', '特徵值', '特徵向量'], proof: '特徵值和特徵向量在線性代數中用於描述線性變換的特殊方向和縮放因子。' },
+            { id: 357, name: '矩陣的逆', formula: '\\mathbf{A}^{-1} = \\frac{1}{\\det(\\mathbf{A})} \\text{adj}(\\mathbf{A})', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'matrix inverse', '大學', '線性代數', '逆矩陣'], proof: '矩陣的逆用於求解線性方程組和進行線性變換的逆操作。' },
+            { id: 358, name: '中心點公式', formula: 'M = (\\frac{x_1+x_2}{2}, \\frac{y_1+y_2}{2})', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'midpoint', '國中', '幾何', '中點'], proof: '中心點是連接兩點線段的中點，其坐標是兩點坐標的平均值。' },
+            { id: 359, name: '排列組合乘法原理', formula: '\\text{總方法數} = N_1 \\times N_2 \\times ... \\times N_k', grade: '國中', topic: '機率與統計', tags: ['junior high', 'probability', 'counting principle', 'multiplication principle', '國中', '機率', '計數原理', '乘法原理'], proof: '如果一個事件可以分解為 $k$ 個步驟，每個步驟有 $N_i$ 種方法，則總方法數為所有步驟方法數的乘積。' },
+            { id: 360, name: '排列組合加法原理', formula: '\\text{總方法數} = N_1 + N_2 + ... + N_k', grade: '國中', topic: '機率與統計', tags: ['junior high', 'probability', 'counting principle', 'addition principle', '國中', '機率', '計數原理', '加法原理'], proof: '如果一個事件可以透過 $k$ 種互斥的方式完成，每種方式有 $N_i$ 種方法，則總方法數為所有方式方法數的總和。' },
+            { id: 361, name: '多項式除法', formula: '\\text{被除式} = \\text{除式} \\times \\text{商式} + \\text{餘式}', grade: '高中', topic: '代數', tags: ['high school', 'algebra', 'polynomial division', '高中', '代數', '多項式除法'], proof: '多項式除法類似於整數除法，可以透過長除法或綜合除法實現。' },
+            { id: 362, name: '餘式定理', formula: '\\text{若 } P(x) \\text{ 除以 } (x-a) \\text{，餘式為 } P(a)', grade: '高中', topic: '代數', tags: ['high school', 'algebra', 'remainder theorem', '高中', '代數', '餘式定理'], proof: '根據多項式除法，$P(x) = Q(x)(x-a) + R$，其中 $R$ 為常數。令 $x=a$，則 $P(a) = Q(a)(a-a) + R = R$。' },
+            { id: 363, name: '因式定理', formula: '\\text{若 } P(a) = 0 \\text{，則 } (x-a) \\text{ 為 } P(x) \\text{ 的因式}', grade: '高中', topic: '代數', tags: ['high school', 'algebra', 'factor theorem', '高中', '代數', '因式定理'], proof: '因式定理是餘式定理的推論。如果 $P(a) = 0$，則餘式為 $0$，表示 $P(x)$ 可以被 $(x-a)$ 整除，即 $(x-a)$ 是 $P(x)$ 的因式。' },
+            { id: 364, name: '牛頓法 (求根)', formula: 'x_{n+1} = x_n - \\frac{f(x_n)}{f\'(x_n)}', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'numerical methods', 'Newton\'s method', '大學', '微積分', '數值方法', '牛頓法'], proof: '牛頓法是一種迭代方法，用於尋找函數的根。其推導基於在當前點的切線與 x 軸的交點作為下一個近似值。' },
+            { id: 365, name: '羅爾定理', formula: '\\text{若 } f(x) \\text{ 在 } [a,b] \\text{ 連續，在 } (a,b) \\text{ 可微，且 } f(a)=f(b) \\text{，則存在 } c \\in (a,b) \\text{ 使得 } f\'(c)=0', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'Rolle\'s Theorem', '大學', '微積分', '羅爾定理'], proof: '羅爾定理是均值定理的一個特例，表明在滿足特定條件的函數中，至少存在一個點，其導數為零。' },
+            { id: 366, name: '均值定理', formula: '\\text{若 } f(x) \\text{ 在 } [a,b] \\text{ 連續，在 } (a,b) \\text{ 可微，則存在 } c \\in (a,b) \\text{ 使得 } f\'(c) = \\frac{f(b) - f(a)}{b - a}', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'Mean Value Theorem', '大學', '微積分', '均值定理'], proof: '均值定理表明，在一個區間內，函數的平均變化率等於某一點的瞬時變化率。' },
+            { id: 367, name: '洛必達法則', formula: '\\lim_{x \\to c} \\frac{f(x)}{g(x)} = \\lim_{x \\to c} \\frac{f\'(x)}{g\'(x)} \\text{ (當 } \\lim f(x) = \\lim g(x) = 0 \\text{ 或 } \\pm \\infty)', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'L\'Hôpital\'s Rule', '大學', '微積分', '洛必達法則'], proof: '洛必達法則用於計算不定型極限，透過對分子和分母分別求導來簡化極限計算。' },
+            { id: 368, name: '三角函數的導函數', formula: '\\frac{d}{dx}(\\sin x) = \\cos x, \\frac{d}{dx}(\\cos x) = -\\sin x, \\frac{d}{dx}(\\tan x) = \\sec^2 x', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'differentiation', 'trigonometric functions', '高中', '微積分', '微分', '三角函數', '導函數'], proof: '這些導函數可以透過導數定義和三角恆等式推導。' },
+            { id: 369, name: '三角函數的積分', formula: '\\int \\sin x dx = -\\cos x + C, \\int \\cos x dx = \\sin x + C, \\int \\sec^2 x dx = \\tan x + C', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'integration', 'trigonometric functions', '高中', '微積分', '積分', '三角函數'], proof: '這些積分是其對應導函數的逆運算。' },
+            { id: 370, name: '分部積分法', formula: '\\int u dv = uv - \\int v du', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'integration by parts', '大學', '微積分', '分部積分'], proof: '分部積分法是乘積法則的逆運算，用於積分兩個函數的乘積。' },
+            { id: 371, name: '換元積分法', formula: '\\int f(g(x))g\'(x) dx = \\int f(u) du \\text{ (其中 } u = g(x))', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'substitution rule', '高中', '微積分', '換元積分'], proof: '換元積分法是鏈式法則的逆運算，用於簡化複雜函數的積分。' },
+            { id: 372, name: '弧度與角度換算', formula: '\\pi \\text{ 弧度} = 180^{\\circ}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'radian', 'degree', '國中', '幾何', '弧度', '角度', '換算'], proof: '弧度定義為圓心角所對弧長與半徑之比。一個圓的周長為 $2\\pi r$，所以整個圓的弧度為 $2\\pi r / r = 2\\pi$ 弧度，對應 $360^{\\circ}$。' },
+            { id: 373, name: '圓錐體積', formula: 'V = \\frac{1}{3} \\pi r^2 h', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'volume', 'cone', '國中', '幾何', '體積', '圓錐'], proof: '圓錐體積是同底同高圓柱體積的三分之一。這可以透過積分或卡瓦列里原理證明。' },
+            { id: 374, name: '圓柱體積', formula: 'V = \\pi r^2 h', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'volume', 'cylinder', '國中', '幾何', '體積', '圓柱'], proof: '圓柱體積是底面積乘以高。' },
+            { id: 375, name: '球體積', formula: 'V = \\frac{4}{3} \\pi r^3', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'volume', 'sphere', '國中', '幾何', '體積', '球體'], proof: '球體積的證明通常涉及積分（圓盤法或殼層法）。' },
+            { id: 376, name: '球表面積', formula: 'A = 4 \\pi r^2', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'surface area', 'sphere', '國中', '幾何', '表面積', '球體'], proof: '球表面積的證明通常涉及積分。' },
+            { id: 377, name: '費馬小定理', formula: '\\text{若 } p \\text{ 為質數，則對於任意整數 } a \\text{，有 } a^p \\equiv a \\pmod{p}', grade: '大學/進階', topic: '數論', tags: ['university', 'number theory', 'Fermat\'s Little Theorem', '大學', '數論', '費馬小定理'], proof: '費馬小定理是數論中的一個基本定理，證明涉及模算術和組合論證。' },
+            { id: 378, name: '尤拉函數 (Euler\'s totient function)', formula: '\\phi(n) = n \\prod_{p|n, p \\text{ is prime}} (1 - \\frac{1}{p})', grade: '大學/進階', topic: '數論', tags: ['university', 'number theory', 'Euler\'s totient function', '大學', '數論', '尤拉函數'], proof: '尤拉函數計算小於或等於 $n$ 且與 $n$ 互質的正整數的個數。' },
+            { id: 379, name: '尤拉定理', formula: '\\text{若 } \\text{gcd}(a, n) = 1 \\text{，則 } a^{\\phi(n)} \\equiv 1 \\pmod{n}', grade: '大學/進階', topic: '數論', tags: ['university', 'number theory', 'Euler\'s Theorem', '大學', '數論', '尤拉定理'], proof: '尤拉定理是費馬小定理的推廣，證明涉及簡化剩餘系。' },
+            { id: 380, name: '中國餘數定理', formula: '\\text{給定 } n_1, ..., n_k \\text{ 兩兩互質，則同餘方程組 } x \\equiv a_i \\pmod{n_i} \\text{ 有唯一解 } \\pmod{N}', grade: '大學/進階', topic: '數論', tags: ['university', 'number theory', 'Chinese Remainder Theorem', '大學', '數論', '中國餘數定理'], proof: '中國餘數定理用於解決一組同餘方程組的問題。' },
+            { id: 381, name: '圖論：握手定理', formula: '\\sum_{v \\in V} \\text{deg}(v) = 2|E|', grade: '大學/進階', topic: '離散數學', tags: ['university', 'discrete math', 'graph theory', 'handshaking lemma', '大學', '離散數學', '圖論', '握手定理'], proof: '握手定理指出在任何圖中，所有頂點的度數之和等於邊數的兩倍。因為每條邊連接兩個頂點，對兩個頂點的度數各貢獻 1。' },
+            { id: 382, name: '圖論：尤拉迴路存在條件', formula: '\\text{連通圖有尤拉迴路，若且唯若所有頂點的度數皆為偶數}', grade: '大學/進階', topic: '離散數學', tags: ['university', 'discrete math', 'graph theory', 'Eulerian circuit', '大學', '離散數學', '圖論', '尤拉迴路'], proof: '尤拉迴路是圖中經過每條邊恰好一次的閉合路徑。' },
+            { id: 383, name: '圖論：尤拉路徑存在條件', formula: '\\text{連通圖有尤拉路徑，若且唯若恰有 0 或 2 個頂點的度數為奇數}', grade: '大學/進階', topic: '離散數學', tags: ['university', 'discrete math', 'graph theory', 'Eulerian path', '大學', '離散數學', '圖論', '尤拉路徑'], proof: '尤拉路徑是圖中經過每條邊恰好一次的路徑。' },
+            { id: 384, name: '機率：大數法則', formula: '\\lim_{n \\to \\infty} \\bar{X}_n = \\mu \\text{ (依機率收斂或幾乎必然收斂)}', grade: '大學/進階', topic: '機率與統計', tags: ['university', 'probability', 'statistics', 'law of large numbers', '大學', '機率', '統計', '大數法則'], proof: '大數法則表明，隨著試驗次數的增加，事件發生的頻率會越來越接近其理論機率。' },
+            { id: 385, name: '排列組合：重複排列', formula: 'n^k', grade: '高中', topic: '機率與統計', tags: ['high school', 'combinatorics', 'permutation with repetition', '高中', '組合學', '重複排列'], proof: '從 $n$ 種不同的物品中，有放回地取出 $k$ 次，每次取出的物品都可以重複。每次取出都有 $n$ 種選擇，共 $k$ 次，所以是 $n^k$。' },
+            { id: 386, name: '排列組合：重複組合', formula: 'H(n, k) = C(n+k-1, k)', grade: '高中', topic: '機率與統計', tags: ['high school', 'combinatorics', 'combination with repetition', '高中', '組合學', '重複組合'], proof: '重複組合可以透過「插板法」或「星與棒」模型來證明，將問題轉化為在 $n$ 個類別中分配 $k$ 個物品，允許重複。' },
+            { id: 387, name: '多項式定理', formula: '(x_1 + x_2 + ... + x_m)^n = \\sum_{k_1+k_2+...+k_m=n} \\frac{n!}{k_1!k_2!...k_m!} x_1^{k_1} x_2^{k_2} ... x_m^{k_m}', grade: '大學/進階', topic: '代數', tags: ['university', 'algebra', 'multinomial theorem', '大學', '代數', '多項式定理'], proof: '多項式定理是二項式定理的推廣，用於展開多個變數的和的冪次。' },
+            { id: 388, name: '行列式性質：交換兩行/列', formula: '\\text{交換兩行/列，行列式變號}', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'determinant properties', '高中', '線性代數', '行列式'], proof: '行列式定義中包含排列的符號函數，交換兩行/列會改變排列的奇偶性，從而改變符號。' },
+            { id: 389, name: '行列式性質：某行/列乘以常數', formula: '\\text{某行/列乘以 } k \\text{，行列式乘以 } k', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'determinant properties', '高中', '線性代數', '行列式'], proof: '行列式是其行向量（或列向量）的線性函數。' },
+            { id: 390, name: '行列式性質：兩行/列成比例', formula: '\\text{若兩行/列成比例，行列式為 } 0', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'determinant properties', '高中', '線性代數', '行列式'], proof: '如果兩行/列成比例，則這些行/列向量是線性相關的，這意味著矩陣是奇異的，其行列式為零。' },
+            { id: 391, name: '矩陣的秩', formula: '\\text{rank}(\\mathbf{A}) = \\text{行空間的維數} = \\text{列空間的維數}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'rank', '大學', '線性代數', '秩'], proof: '矩陣的秩表示其線性獨立的行或列的最大數量。' },
+            { id: 392, name: '線性方程組解的存在性', formula: '\\text{若 } \\text{rank}(\\mathbf{A}) = \\text{rank}(\\mathbf{A|b}) \\text{，則方程組有解}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'system of linear equations', '高中', '大學', '線性代數', '線性方程組'], proof: '當係數矩陣的秩等於增廣矩陣的秩時，線性方程組有解。這表示向量 $\\mathbf{b}$ 位於矩陣 $\\mathbf{A}$ 的列空間中。' },
+            { id: 393, name: '線性方程組解的唯一性', formula: '\\text{若 } \\text{rank}(\\mathbf{A}) = \\text{變數個數} \\text{，則方程組有唯一解}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'system of linear equations', '高中', '大學', '線性代數', '線性方程組'], proof: '當係數矩陣的秩等於變數個數時，表示所有列向量都是線性獨立的，因此解是唯一的。' },
+            { id: 394, name: '梯度', formula: '\\nabla f = (\\frac{\\partial f}{\\partial x}, \\frac{\\partial f}{\\partial y}, \\frac{\\partial f}{\\partial z})', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'gradient', '大學', '微積分', '梯度'], proof: '梯度是一個向量，指向函數增長最快的方向，其大小是該方向上的最大變化率。' },
+            { id: 395, name: '方向導數', formula: 'D_\\mathbf{u} f = \\nabla f \\cdot \\mathbf{u}', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'directional derivative', '大學', '微積分', '方向導數'], proof: '方向導數表示函數在特定方向上的變化率。' },
+            { id: 396, name: '拉格朗日乘數法', formula: '\\nabla f(x,y,z) = \\lambda \\nabla g(x,y,z)', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'optimization', 'Lagrange multipliers', '大學', '微積分', '最佳化', '拉格朗日乘數法'], proof: '拉格朗日乘數法用於在給定約束條件下尋找函數的極值。在極值點，目標函數的梯度與約束條件的梯度平行。' },
+            { id: 397, name: '傅立葉轉換', formula: '\\mathcal{F}\\{f(x)\\} = F(\\xi) = \\int_{-\\infty}^{\\infty} f(x) e^{-2\\pi i x \\xi} dx', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'Fourier transform', '大學', '微分方程', '傅立葉轉換'], proof: '傅立葉轉換將函數從時域或空間域轉換到頻域。' },
+            { id: 398, name: '拉普拉斯方程', formula: '\\nabla^2 f = 0 \\text{ 或 } \\frac{\\partial^2 f}{\\partial x^2} + \\frac{\\partial^2 f}{\\partial y^2} + \\frac{\\partial^2 f}{\\partial z^2} = 0', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'Laplace\'s equation', '大學', '微分方程', '拉普拉斯方程'], proof: '拉普拉斯方程是一個偏微分方程，在物理學和工程學中廣泛應用，例如描述穩態熱傳導和電位。' },
+            { id: 399, name: '熱傳導方程 (一維)', formula: '\\frac{\\partial u}{\\partial t} = \\alpha \\frac{\\partial^2 u}{\\partial x^2}', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'heat equation', '大學', '微分方程', '熱傳導方程'], proof: '熱傳導方程描述了熱量在介質中的傳播。' },
+            { id: 400, name: '波動方程 (一維)', formula: '\\frac{\\partial^2 u}{\\partial t^2} = c^2 \\frac{\\partial^2 u}{\\partial x^2}', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'wave equation', '大學', '微分方程', '波動方程'], proof: '波動方程描述了波在介質中的傳播。' },
+            { id: 401, name: '歐幾里得演算法 (輾轉相除法)', formula: '\\text{gcd}(a, b) = \\text{gcd}(b, a \\pmod b)', grade: '國中', topic: '數論', tags: ['junior high', 'number theory', 'Euclidean algorithm', 'gcd', '國中', '數論', '歐幾里得演算法', '輾轉相除法'], proof: '歐幾里得演算法用於計算兩個整數的最大公因數。其原理是兩個數的最大公因數等於其中較小的數與兩數相除餘數的最大公因數。' },
+            { id: 402, name: '質因數分解', formula: '\\text{任何大於1的整數都可以唯一地表示為質數的乘積}', grade: '國小', topic: '數論', tags: ['elementary', 'number theory', 'prime factorization', '國小', '數論', '質因數分解', '質數'], proof: '這是算術基本定理，證明涉及反證法。' },
+            { id: 403, name: '質數定義', formula: '\\text{大於1的自然數，除了1和本身外，不能被其他自然數整除}', grade: '國小', topic: '數論', tags: ['elementary', 'number theory', 'prime number', '國小', '數論', '質數'], proof: '這是質數的基本定義。' },
+            { id: 404, name: '無限多質數', formula: '\\text{質數有無窮多個}', grade: '大學/進階', topic: '數論', tags: ['university', 'number theory', 'infinitude of primes', '大學', '數論', '質數'], proof: '歐幾里得證明了質數有無窮多個。假設質數是有限的，將所有質數相乘加一，得到的新數不能被任何已知的質數整除，因此它本身是質數或有新的質因數，與假設矛盾。' },
+            { id: 405, name: '費馬數', formula: 'F_n = 2^{2^n} + 1', grade: '大學/進階', topic: '數論', tags: ['university', 'number theory', 'Fermat number', '大學', '數論', '費馬數'], proof: '費馬數在數論中用於研究質數。' },
+            { id: 406, name: '梅森質數', formula: 'M_p = 2^p - 1 \\text{ (其中 } p \\text{ 為質數)}', grade: '大學/進階', topic: '數論', tags: ['university', 'number theory', 'Mersenne prime', '大學', '數論', '梅森質數'], proof: '梅森質數是形如 $2^p - 1$ 的質數。' },
+            { id: 407, name: '完全數', formula: '\\text{一個正整數，其所有真因數（除了自身以外的因數）的和等於它本身}', grade: '大學/進階', topic: '數論', tags: ['university', 'number theory', 'perfect number', '大學', '數論', '完全數'], proof: '例如，6 的真因數是 1, 2, 3，其和為 $1+2+3=6$。' },
+            { id: 408, name: '黃金比例', formula: '\\phi = \\frac{1 + \\sqrt{5}}{2} \\approx 1.618', grade: '高中', topic: '幾何', tags: ['high school', 'geometry', 'golden ratio', '高中', '幾何', '黃金比例'], proof: '黃金比例定義為兩數之比，使得大數與小數之比等於兩數之和與大數之比。' },
+            { id: 409, name: '費波那契數列', formula: 'F_n = F_{n-1} + F_{n-2} \\text{ (其中 } F_0=0, F_1=1)', grade: '國中', topic: '數列與級數', tags: ['junior high', 'sequence', 'Fibonacci sequence', '國中', '數列', '費波那契數列'], proof: '費波那契數列是一個遞歸定義的數列，廣泛出現在自然界和數學中。' },
+            { id: 410, name: '線性規劃 (基本概念)', formula: '\\text{最佳化目標函數 } Z = c_1 x_1 + ... + c_n x_n \\text{，受限於線性約束條件}', grade: '高中', topic: '最佳化', tags: ['high school', 'optimization', 'linear programming', '高中', '最佳化', '線性規劃'], proof: '線性規劃是數學最佳化的一個分支，用於在給定線性等式和不等式約束下最大化或最小化線性目標函數。' },
+            { id: 411, name: '單體法 (Simplex method)', formula: '\\text{用於求解線性規劃問題的迭代演算法}', grade: '大學/進階', topic: '最佳化', tags: ['university', 'optimization', 'simplex method', '大學', '最佳化', '單體法'], proof: '單體法是求解線性規劃問題的一種有效演算法，透過在可行域的頂點之間移動來尋找最佳解。' },
+            { id: 412, name: '黎曼和', formula: '\\sum_{i=1}^n f(x_i^*) \\Delta x', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'Riemann sum', '高中', '微積分', '黎曼和'], proof: '黎曼和是積分的基礎，用於近似計算函數曲線下的面積。' },
+            { id: 413, name: '微積分：鏈式法則', formula: '\\frac{dy}{dx} = \\frac{dy}{du} \\frac{du}{dx}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'chain rule', '高中', '微積分', '鏈式法則'], proof: '鏈式法則用於計算複合函數的導數。' },
+            { id: 414, name: '微積分：乘積法則', formula: '\\frac{d}{dx}(u(x)v(x)) = u\'(x)v(x) + u(x)v\'(x)', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'product rule', '高中', '微積分', '乘積法則'], proof: '乘積法則用於計算兩個函數乘積的導數。' },
+            { id: 415, name: '微積分：商數法則', formula: '\\frac{d}{dx}(\\frac{u(x)}{v(x)}) = \\frac{u\'(x)v(x) - u(x)v\'(x)}{[v(x)]^2}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'quotient rule', '高中', '微積分', '商數法則'], proof: '商數法則用於計算兩個函數商的導數。' },
+            { id: 416, name: '微積分：隱函數微分', formula: '\\frac{dy}{dx} \\text{ (透過對等式兩邊同時微分，將 y 視為 x 的函數)}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'implicit differentiation', '高中', '微積分', '隱函數微分'], proof: '隱函數微分用於對無法直接表示為 $y=f(x)$ 形式的函數進行微分。' },
+            { id: 417, name: '微積分：極值判斷 (一階導數)', formula: '\\text{若 } f\'(c)=0 \\text{ 且 } f\'(x) \\text{ 在 } c \\text{ 處變號，則 } c \\text{ 為極值點}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'extrema', 'first derivative test', '高中', '微積分', '極值', '一階導數判斷法'], proof: '一階導數判斷法透過檢查導數的符號變化來判斷函數的局部極大值或極小值。' },
+            { id: 418, name: '微積分：極值判斷 (二階導數)', formula: '\\text{若 } f\'(c)=0 \\text{ 且 } f\'\'(c)>0 \\text{，則 } c \\text{ 為局部極小值；若 } f\'\'(c)<0 \\text{，則為局部極大值}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'extrema', 'second derivative test', '高中', '微積分', '極值', '二階導數判斷法'], proof: '二階導數判斷法透過檢查二階導數的符號來判斷函數的局部極大值或極小值。' },
+            { id: 419, name: '微積分：凹向性判斷', formula: '\\text{若 } f\'\'(x)>0 \\text{，函數凹向上；若 } f\'\'(x)<0 \\text{，函數凹向下}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'concavity', '高中', '微積分', '凹向性'], proof: '二階導數的符號決定了函數圖形的凹向性。' },
+            { id: 420, name: '微積分：反曲點', formula: '\\text{若 } f\'\'(c)=0 \\text{ 且 } f\'\'(x) \\text{ 在 } c \\text{ 處變號，則 } c \\text{ 為反曲點}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'inflection point', '高中', '微積分', '反曲點'], proof: '反曲點是函數凹向性改變的點。' },
+            { id: 421, name: '微積分：旋轉體積 (圓盤法)', formula: 'V = \\int_a^b \\pi [f(x)]^2 dx', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'volume of revolution', 'disk method', '大學', '微積分', '旋轉體積', '圓盤法'], proof: '圓盤法用於計算函數繞軸旋轉形成的體積，將體積分解為無限多個薄圓盤。' },
+            { id: 422, name: '微積分：旋轉體積 (殼層法)', formula: 'V = \\int_a^b 2\\pi x f(x) dx', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'volume of revolution', 'shell method', '大學', '微積分', '旋轉體積', '殼層法'], proof: '殼層法用於計算函數繞軸旋轉形成的體積，將體積分解為無限多個薄圓柱殼。' },
+            { id: 423, name: '微積分：弧長', formula: 'L = \\int_a^b \\sqrt{1 + [f\'(x)]^2} dx', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'arc length', '大學', '微積分', '弧長'], proof: '弧長公式用於計算函數曲線的長度，將曲線分解為無限多個小線段。' },
+            { id: 424, name: '微積分：曲面面積 (旋轉)', formula: 'A = \\int_a^b 2\\pi f(x) \\sqrt{1 + [f\'(x)]^2} dx', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'surface area of revolution', '大學', '微積分', '曲面面積', '旋轉'], proof: '旋轉曲面面積公式用於計算函數曲線繞軸旋轉形成的曲面面積。' },
+            { id: 425, name: '向量：點積與夾角', formula: '\\vec{a} \\cdot \\vec{b} = |\\vec{a}||\\vec{b}| \\cos \\theta', grade: '高中', topic: '向量', tags: ['high school', 'vector', 'dot product', 'angle', '高中', '向量', '點積', '夾角'], proof: '點積的幾何定義，用於計算兩個向量的夾角。' },
+            { id: 426, name: '向量：投影', formula: '\\text{proj}_{\\vec{b}} \\vec{a} = \\frac{\\vec{a} \\cdot \\vec{b}}{|\\vec{b}|^2} \\vec{b}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'vector projection', '大學', '線性代數', '向量投影'], proof: '向量投影表示一個向量在另一個向量方向上的分量。' },
+            { id: 427, name: '機率：期望值的線性性質', formula: 'E(aX + bY) = aE(X) + bE(Y)', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'statistics', 'expected value', 'linearity', '高中', '機率', '統計', '期望值', '線性性質'], proof: '期望值的線性性質表明，和的期望值等於期望值的和，常數倍的期望值等於常數倍的期望值。' },
+            { id: 428, name: '機率：獨立事件的變異數和', formula: '\\text{Var}(X+Y) = \\text{Var}(X) + \\text{Var}(Y) \\text{ (當 X, Y 獨立時)}', grade: '大學/進階', topic: '機率與統計', tags: ['university', 'probability', 'statistics', 'variance', 'independent events', '大學', '機率', '統計', '變異數', '獨立事件'], proof: '當兩個隨機變數獨立時，它們和的變異數等於它們各自變異數的和。' },
+            { id: 429, name: '機率：二項分佈', formula: 'P(X=k) = \\binom{n}{k} p^k (1-p)^{n-k}', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'statistics', 'binomial distribution', '高中', '機率', '統計', '二項分佈'], proof: '二項分佈描述了在 $n$ 次獨立的伯努利試驗中，成功 $k$ 次的機率。' },
+            { id: 430, name: '機率：卜瓦松分佈', formula: 'P(X=k) = \\frac{\\lambda^k e^{-\\lambda}}{k!}', grade: '大學/進階', topic: '機率與統計', tags: ['university', 'probability', 'statistics', 'Poisson distribution', '大學', '機率', '統計', '卜瓦松分佈'], proof: '卜瓦松分佈描述了在固定時間或空間間隔內，事件發生次數的機率。' },
+            { id: 431, name: '機率：指數分佈', formula: 'f(x) = \\lambda e^{-\\lambda x} \\text{ (當 } x \\ge 0)', grade: '大學/進階', topic: '機率與統計', tags: ['university', 'probability', 'statistics', 'exponential distribution', '大學', '機率', '統計', '指數分佈'], proof: '指數分佈描述了在卜瓦松過程中，事件之間的時間間隔。' },
+            { id: 432, name: '機率：均勻分佈', formula: 'f(x) = \\frac{1}{b-a} \\text{ (當 } a \\le x \\le b)', grade: '大學/進階', topic: '機率與統計', tags: ['university', 'probability', 'statistics', 'uniform distribution', '大學', '機率', '統計', '均勻分佈'], proof: '均勻分佈表示在給定區間內，所有值具有相同的機率密度。' },
+            { id: 433, name: '微積分：無窮級數收斂判斷 (比值審斂法)', formula: '\\lim_{n \\to \\infty} |\\frac{a_{n+1}}{a_n}| = L \\text{，若 } L<1 \\text{ 則收斂，若 } L>1 \\text{ 則發散}', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'series convergence', 'ratio test', '大學', '微積分', '級數收斂', '比值審斂法'], proof: '比值審斂法用於判斷無窮級數的收斂性。' },
+            { id: 434, name: '微積分：無窮級數收斂判斷 (根值審斂法)', formula: '\\lim_{n \\to \\infty} \\sqrt[n]{|a_n|} = L \\text{，若 } L<1 \\text{ 則收斂，若 } L>1 \\text{ 則發散}', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'series convergence', 'root test', '大學', '微積分', '級數收斂', '根值審斂法'], proof: '根值審斂法也用於判斷無窮級數的收斂性。' },
+            { id: 435, name: '微積分：黎曼積分存在條件', formula: '\\text{若 } f(x) \\text{ 在 } [a,b] \\text{ 上連續，則 } f(x) \\text{ 在 } [a,b] \\text{ 上黎曼可積}', grade: '大學/進階', topic: '實分析', tags: ['university', 'real analysis', 'Riemann integral', '大學', '實分析', '黎曼積分'], proof: '黎曼積分的嚴格定義涉及上和與下和的極限。' },
+            { id: 436, name: '微積分：多變數函數偏導數', formula: '\\frac{\\partial f}{\\partial x} = \\lim_{h \\to 0} \\frac{f(x+h, y, z) - f(x, y, z)}{h}', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'partial derivative', '大學', '微積分', '偏導數'], proof: '偏導數表示多變數函數在保持其他變數不變的情況下，對單一變數的變化率。' },
+            { id: 437, name: '微積分：全微分', formula: 'df = \\frac{\\partial f}{\\partial x} dx + \\frac{\\partial f}{\\partial y} dy + \\frac{\\partial f}{\\partial z} dz', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'total differential', '大學', '微積分', '全微分'], proof: '全微分表示多變數函數的總變化量，考慮了所有變數的變化。' },
+            { id: 438, name: '微積分：方向導數 (多變數)', formula: 'D_\\mathbf{u} f(x,y,z) = \\nabla f(x,y,z) \\cdot \\mathbf{u}', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'directional derivative', 'multivariable', '大學', '微積分', '方向導數', '多變數'], proof: '多變數函數的方向導數表示函數在給定方向上的變化率。' },
+            { id: 439, name: '微積分：雅可比行列式', formula: 'J = \\det \\begin{pmatrix} \\frac{\\partial x}{\\partial u} & \\frac{\\partial x}{\\partial v} \\\\ \\frac{\\partial y}{\\partial u} & \\frac{\\partial y}{\\partial v} \\end{pmatrix}', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'Jacobian determinant', '大學', '微積分', '雅可比行列式'], proof: '雅可比行列式用於多變數函數的變量替換積分，表示體積或面積的縮放因子。' },
+            { id: 440, name: '微積分：重積分 (Fubini\'s Theorem)', formula: '\\iint_R f(x,y) dA = \\int_a^b \\int_c^d f(x,y) dy dx = \\int_c^d \\int_a^b f(x,y) dx dy', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'multiple integrals', 'Fubini\'s Theorem', '大學', '微積分', '重積分', '富比尼定理'], proof: '富比尼定理提供了計算重積分的方法，即可以以任意順序進行迭代積分。' },
+            { id: 441, name: '機率：條件期望值', formula: 'E(X|Y=y) = \\sum x P(X=x|Y=y)', grade: '大學/進階', topic: '機率與統計', tags: ['university', 'probability', 'statistics', 'conditional expectation', '大學', '機率', '統計', '條件期望值'], proof: '條件期望值是在給定另一個隨機變數的條件下，一個隨機變數的期望值。' },
+            { id: 442, name: '機率：共變異數', formula: '\\text{Cov}(X,Y) = E[(X-E(X))(Y-E(Y))] = E(XY) - E(X)E(Y)', grade: '大學/進階', topic: '機率與統計', tags: ['university', 'probability', 'statistics', 'covariance', '大學', '機率', '統計', '共變異數'], proof: '共變異數衡量兩個隨機變數的線性關係強度和方向。' },
+            { id: 443, name: '機率：相關係數', formula: '\\rho_{XY} = \\frac{\\text{Cov}(X,Y)}{\\sigma_X \\sigma_Y}', grade: '大學/進階', topic: '機率與統計', tags: ['university', 'probability', 'statistics', 'correlation coefficient', '大學', '機率', '統計', '相關係數'], proof: '相關係數是標準化後的共變異數，表示兩個隨機變數之間線性關係的強度和方向，值介於 -1 和 1 之間。' },
+            { id: 444, name: '線性代數：線性組合', formula: 'c_1 \\mathbf{v}_1 + c_2 \\mathbf{v}_2 + ... + c_k \\mathbf{v}_k', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'linear combination', '高中', '線性代數', '線性組合'], proof: '線性組合是將一組向量乘以純量並相加。' },
+            { id: 445, name: '線性代數：線性獨立', formula: '\\text{若 } c_1 \\mathbf{v}_1 + ... + c_k \\mathbf{v}_k = \\mathbf{0} \\text{ 僅當所有 } c_i = 0', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'linear independence', '高中', '線性代數', '線性獨立'], proof: '線性獨立的向量組意味著沒有任何向量可以表示為其他向量的線性組合。' },
+            { id: 446, name: '線性代數：基底', formula: '\\text{向量空間的一組線性獨立的生成向量}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'basis', '大學', '線性代數', '基底'], proof: '基底是向量空間中最小的生成集，也是最大的線性獨立集。' },
+            { id: 447, name: '線性代數：維度定理', formula: '\\text{dim}(\\text{null}(\\mathbf{A})) + \\text{rank}(\\mathbf{A}) = n \\text{ (其中 n 為列數)}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'rank-nullity theorem', '大學', '線性代數', '維度定理'], proof: '維度定理將矩陣的零空間維度（零度）和列空間維度（秩）聯繫起來。' },
+            { id: 448, name: '線性代數：正交矩陣', formula: '\\mathbf{Q}^T \\mathbf{Q} = \\mathbf{QQ}^T = \\mathbf{I}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'orthogonal matrix', '大學', '線性代數', '正交矩陣'], proof: '正交矩陣的列（和行）是正交單位向量，其逆等於其轉置。' },
+            { id: 449, name: '線性代數：特徵分解', formula: '\\mathbf{A} = \\mathbf{PDP}^{-1}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'eigen decomposition', '大學', '線性代數', '特徵分解'], proof: '特徵分解將一個矩陣分解為特徵向量矩陣、特徵值對角矩陣及其逆。' },
+            { id: 450, name: '線性代數：奇異值分解 (SVD)', formula: '\\mathbf{A} = \\mathbf{U \\Sigma V}^T', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'singular value decomposition', '大學', '線性代數', '奇異值分解'], proof: '奇異值分解是矩陣分解的一種強大工具，適用於任何矩陣，廣泛應用於數據壓縮和降維。' },
+            { id: 451, name: '拓撲學：開集定義', formula: '\\text{一個集合，其中每個點都有一個鄰域完全包含在該集合中}', grade: '大學/進階', topic: '拓撲學', tags: ['university', 'topology', 'open set', '大學', '拓撲學', '開集'], proof: '開集是拓撲空間的基本概念，用於定義連續性、收斂性等。' },
+            { id: 452, name: '拓撲學：閉集定義', formula: '\\text{一個集合，其補集是開集}', grade: '大學/進階', topic: '拓撲學', tags: ['university', 'topology', 'closed set', '大學', '拓撲學', '閉集'], proof: '閉集是開集的對偶概念。' },
+            { id: 453, name: '拓撲學：緊緻性', formula: '\\text{每個開覆蓋都有有限子覆蓋}', grade: '大學/進階', topic: '拓撲學', tags: ['university', 'topology', 'compactness', '大學', '拓撲學', '緊緻性'], proof: '緊緻性是拓撲空間的一個重要性質，與連續函數的性質密切相關。' },
+            { id: 454, name: '拓撲學：連通性', formula: '\\text{不能表示為兩個非空、不相交的開集的聯集}', grade: '大學/進階', topic: '拓撲學', tags: ['university', 'topology', 'connectedness', '大學', '拓撲學', '連通性'], proof: '連通性描述了拓撲空間是否「由一個單一的部分組成」。' },
+            { id: 455, name: '複變函數：柯西-黎曼方程', formula: '\\frac{\\partial u}{\\partial x} = \\frac{\\partial v}{\\partial y} \\text{ 且 } \\frac{\\partial u}{\\partial y} = -\\frac{\\partial v}{\\partial x}', grade: '大學/進階', topic: '複變函數', tags: ['university', 'complex analysis', 'Cauchy-Riemann equations', '大學', '複變函數', '柯西-黎曼方程'], proof: '柯西-黎曼方程是判斷複變函數可導性的必要條件。' },
+            { id: 456, name: '複變函數：柯西積分定理', formula: '\\oint_C f(z) dz = 0 \\text{ (若 } f(z) \\text{ 在 } C \\text{ 內部和其上解析)}', grade: '大學/進階', topic: '複變函數', tags: ['university', 'complex analysis', 'Cauchy\'s integral theorem', '大學', '複變函數', '柯西積分定理'], proof: '柯西積分定理是複變函數論中的核心定理，用於計算複變函數的積分。' },
+            { id: 457, name: '複變函數：留數定理', formula: '\\oint_C f(z) dz = 2\\pi i \\sum \\text{Res}(f, z_k)', grade: '大學/進階', topic: '複變函數', tags: ['university', 'complex analysis', 'residue theorem', '大學', '複變函數', '留數定理'], proof: '留數定理是柯西積分定理的推廣，用於計算複變函數在有奇異點的閉合路徑上的積分。' },
+            { id: 458, name: '微分方程：常微分方程 (ODE) 存在唯一性定理', formula: '\\text{若 } f(t,y) \\text{ 及其對 } y \\text{ 的偏導數連續，則 } y\'=f(t,y), y(t_0)=y_0 \\text{ 有唯一解}', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'existence and uniqueness theorem', 'ODE', '大學', '微分方程', '存在唯一性定理'], proof: '存在唯一性定理保證了常微分方程初值問題解的存在性和唯一性。' },
+            { id: 459, name: '微分方程：齊次線性 ODE 通解', formula: '\\text{若特徵方程有根 } r_1, r_2 \\text{，則通解為 } y(x) = c_1 e^{r_1 x} + c_2 e^{r_2 x}', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'homogeneous linear ODE', '大學', '微分方程', '齊次線性ODE'], proof: '齊次線性常微分方程的解由其特徵方程的根決定。' },
+            { id: 460, name: '微分方程：非齊次線性 ODE 通解', formula: 'y(x) = y_h(x) + y_p(x) \\text{ (齊次解 + 特解)}', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'non-homogeneous linear ODE', '大學', '微分方程', '非齊次線性ODE'], proof: '非齊次線性常微分方程的通解是其對應齊次方程的通解與一個特解的和。' },
+            { id: 461, name: '實分析：開區間套定理', formula: '\\text{若 } I_n = [a_n, b_n] \\text{ 是一個閉區間套，則 } \\bigcap_{n=1}^{\\infty} I_n \\text{ 為非空單點集}', grade: '大學/進階', topic: '實分析', tags: ['university', 'real analysis', 'nested interval theorem', '大學', '實分析', '開區間套定理'], proof: '開區間套定理是實數完備性的重要推論。' },
+            { id: 462, name: '實分析：波爾查諾-魏爾斯特拉斯定理', formula: '\\text{實數集中的每個有界無限子集都有一個聚點}', grade: '大學/進階', topic: '實分析', tags: ['university', 'real analysis', 'Bolzano-Weierstrass theorem', '大學', '實分析', '波爾查諾-魏爾斯特拉斯定理'], proof: '波爾查諾-魏爾斯特拉斯定理是實數完備性的另一個重要推論。' },
+            { id: 463, name: '實分析：海涅-博雷爾定理', formula: '\\text{實數集中的一個閉有界區間是緊緻的}', grade: '大學/進階', topic: '實分析', tags: ['university', 'real analysis', 'Heine-Borel theorem', '大學', '實分析', '海涅-博雷爾定理'], proof: '海涅-博雷爾定理將緊緻性與閉有界性聯繫起來。' },
+            { id: 464, name: '實分析：連續函數的介值定理', formula: '\\text{若 } f \\text{ 在 } [a,b] \\text{ 連續，且 } y \\text{ 在 } f(a) \\text{ 和 } f(b) \\text{ 之間，則存在 } c \\in [a,b] \\text{ 使得 } f(c)=y', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'intermediate value theorem', '高中', '微積分', '介值定理'], proof: '介值定理表明，連續函數在一個區間內會取到所有介於其端點值之間的值。' },
+            { id: 465, name: '實分析：連續函數的極值定理', formula: '\\text{若 } f \\text{ 在 } [a,b] \\text{ 連續，則 } f \\text{ 在 } [a,b] \\text{ 上必有最大值和最小值}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'extreme value theorem', '高中', '微積分', '極值定理'], proof: '極值定理表明，連續函數在閉區間上必能達到其最大值和最小值。' },
+            { id: 466, name: '實分析：均勻連續', formula: '\\text{對於任意 } \\epsilon > 0 \\text{，存在 } \\delta > 0 \\text{，使得當 } |x-y| < \\delta \\text{ 時，有 } |f(x)-f(y)| < \\epsilon', grade: '大學/進階', topic: '實分析', tags: ['university', 'real analysis', 'uniform continuity', '大學', '實分析', '均勻連續'], proof: '均勻連續比普通連續更強，它要求對於給定的 $\\epsilon$，$\\delta$ 的選擇不依賴於點 $x$。' },
+            { id: 467, name: '抽象代數：群定義', formula: '\\text{一個非空集合 G 和一個二元運算 } * \\text{，滿足封閉性、結合律、單位元、逆元}', grade: '大學/進階', topic: '抽象代數', tags: ['university', 'abstract algebra', 'group theory', 'group definition', '大學', '抽象代數', '群論', '群定義'], proof: '群是抽象代數中最基本的代數結構之一。' },
+            { id: 468, name: '抽象代數：子群判斷準則', formula: '\\text{非空子集 H 是 G 的子群，若 } \\forall a,b \\in H, ab^{-1} \\in H', grade: '大學/進階', topic: '抽象代數', tags: ['university', 'abstract algebra', 'subgroup', '大學', '抽象代數', '子群'], proof: '子群是群的子集，本身也是一個群。' },
+            { id: 469, name: '抽象代數：拉格朗日定理 (群論)', formula: '\\text{若 G 是有限群，H 是 G 的子群，則 } |G| = |H| [G:H]', grade: '大學/進階', topic: '抽象代數', tags: ['university', 'abstract algebra', 'Lagrange\'s Theorem', 'group theory', '大學', '抽象代數', '拉格朗日定理', '群論'], proof: '拉格朗日定理表明有限群的子群的階數必須是群的階數的因數。' },
+            { id: 470, name: '抽象代數：同態基本定理', formula: '\\text{若 } \\phi: G \\to H \\text{ 是群同態，則 } G/\\text{ker}(\\phi) \\cong \\text{Im}(\\phi)', grade: '大學/進階', topic: '抽象代數', tags: ['university', 'abstract algebra', 'fundamental theorem of homomorphisms', '大學', '抽象代數', '同態基本定理'], proof: '同態基本定理是代數中一個非常重要的定理，它將商群與同態的像聯繫起來。' },
+            { id: 471, name: '抽象代數：環定義', formula: '\\text{一個集合 R 和兩個二元運算 + 和 } \\cdot \\text{，滿足加法群、乘法結合律、分配律}', grade: '大學/進階', topic: '抽象代數', tags: ['university', 'abstract algebra', 'ring theory', 'ring definition', '大學', '抽象代數', '環論', '環定義'], proof: '環是比群更複雜的代數結構，具有加法和乘法兩種運算。' },
+            { id: 472, name: '抽象代數：域定義', formula: '\\text{一個交換環，其中每個非零元素都有乘法逆元}', grade: '大學/進階', topic: '抽象代數', tags: ['university', 'abstract algebra', 'field theory', 'field definition', '大學', '抽象代數', '域論', '域定義'], proof: '域是比環更特殊的代數結構，允許除法運算。' },
+            { id: 473, name: '調和數列', formula: '\\text{若 } a_1, a_2, ..., a_n \\text{ 為等差數列，則 } \\frac{1}{a_1}, \\frac{1}{a_2}, ..., \\frac{1}{a_n} \\text{ 為調和數列}', grade: '高中', topic: '數列與級數', tags: ['high school', 'sequence', 'harmonic progression', '高中', '數列', '調和數列'], proof: '調和數列的倒數形成等差數列。' },
+            { id: 474, name: '三角恆等式：平方關係', formula: '\\sin^2 \\theta + \\cos^2 \\theta = 1 \\\\ 1 + \\tan^2 \\theta = \\sec^2 \\theta \\\\ 1 + \\cot^2 \\theta = \\csc^2 \\theta', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'identities', '高中', '三角函數', '恆等式', '平方關係'], proof: '這些恆等式可以從直角三角形的畢氏定理和三角函數定義推導。' },
+            { id: 475, name: '向量加法', formula: '\\vec{a} + \\vec{b} = (a_x+b_x, a_y+b_y, a_z+b_z)', grade: '高中', topic: '向量', tags: ['high school', 'vector', 'vector addition', '高中', '向量', '向量加法'], proof: '向量加法是將對應分量相加。' },
+            { id: 476, name: '向量減法', formula: '\\vec{a} - \\vec{b} = (a_x-b_x, a_y-b_y, a_z-b_z)', grade: '高中', topic: '向量', tags: ['high school', 'vector', 'vector subtraction', '高中', '向量', '向量減法'], proof: '向量減法是將對應分量相減。' },
+            { id: 477, name: '向量純量積', formula: 'k \\vec{a} = (ka_x, ka_y, ka_z)', grade: '高中', topic: '向量', tags: ['high school', 'vector', 'scalar multiplication', '高中', '向量', '純量積'], proof: '向量純量積是將每個分量乘以該純量。' },
+            { id: 478, name: '空間向量長度', formula: '|\\vec{a}| = \\sqrt{a_x^2 + a_y^2 + a_z^2}', grade: '高中', topic: '向量', tags: ['high school', 'vector', 'magnitude', '高中', '向量', '長度'], proof: '空間向量的長度是其分量平方和的平方根，是畢氏定理在三維空間的推廣。' },
+            { id: 479, name: '平面方程式 (點法式)', formula: 'A(x - x_0) + B(y - y_0) + C(z - z_0) = 0', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'plane equation', '高中', '解析幾何', '平面', '點法式'], proof: '平面上任意一點與給定點的向量垂直於平面的法向量。' },
+            { id: 480, name: '平面方程式 (一般式)', formula: 'Ax + By + Cz + D = 0', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'plane equation', '高中', '解析幾何', '平面', '一般式'], proof: '所有平面都可以表示為這種形式，其中 $A, B, C$ 不全為零。' },
+            { id: 481, name: '空間直線方程式 (參數式)', formula: 'x = x_0 + at, y = y_0 + bt, z = z_0 + ct', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'line equation', 'parametric form', '高中', '解析幾何', '直線', '參數式'], proof: '參數式表示直線上任意一點的坐標，由一個定點和方向向量決定。' },
+            { id: 482, name: '空間直線方程式 (對稱式)', formula: '\\frac{x - x_0}{a} = \\frac{y - y_0}{b} = \\frac{z - z_0}{c}', grade: '高中', topic: '解析幾何', tags: ['high school', 'analytic geometry', 'line equation', 'symmetric form', '高中', '解析幾何', '直線', '對稱式'], proof: '對稱式是參數式的推導，表示直線的方向比率。' },
+            { id: 483, name: '矩陣的轉置', formula: '(\\mathbf{A}^T)_{ij} = A_{ji}', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'matrix transpose', '高中', '線性代數', '轉置矩陣'], proof: '矩陣的轉置是將其行和列互換。' },
+            { id: 484, name: '矩陣的逆 (2x2)', formula: '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}^{-1} = \\frac{1}{ad-bc} \\begin{pmatrix} d & -b \\\\ -c & a \\end{pmatrix}', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'matrix inverse', '高中', '線性代數', '逆矩陣'], proof: '2x2 矩陣的逆矩陣公式。' },
+            { id: 485, name: '不定積分基本性質', formula: '\\int [f(x) \\pm g(x)] dx = \\int f(x) dx \\pm \\int g(x) dx \\\\ \\int k f(x) dx = k \\int f(x) dx', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'indefinite integral', 'properties', '高中', '微積分', '不定積分', '性質'], proof: '積分的線性性質，直接從微分的線性性質推導。' },
+            { id: 486, name: '定積分基本性質', formula: '\\int_a^b f(x) dx = -\\int_b^a f(x) dx \\\\ \\int_a^c f(x) dx + \\int_c^b f(x) dx = \\int_a^b f(x) dx', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'definite integral', 'properties', '高中', '微積分', '定積分', '性質'], proof: '定積分的性質，反映了積分的幾何意義和可加性。' },
+            { id: 487, name: '反導函數', formula: '\\text{若 } F\'(x) = f(x) \\text{，則 } F(x) \\text{ 是 } f(x) \\text{ 的一個反導函數}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'antiderivative', '高中', '微積分', '反導函數'], proof: '反導函數是微分的逆運算，一個函數的反導函數有無窮多個，它們之間相差一個常數。' },
+            { id: 488, name: '向量空間定義 (簡化)', formula: '\\text{一個集合 V，其元素可以相加，也可以乘以純量，並滿足特定公理}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'vector space', 'definition', '大學', '線性代數', '向量空間', '定義'], proof: '向量空間是線性代數的基本結構，其公理保證了向量加法和純量乘法的良好行為。' },
+            { id: 489, name: '子空間定義 (簡化)', formula: '\\text{向量空間 V 的一個非空子集 W，其本身也是一個向量空間}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'subspace', 'definition', '大學', '線性代數', '子空間', '定義'], proof: '子空間是向量空間的一個子集，它在相同的向量加法和純量乘法下仍然是一個向量空間。' },
+            { id: 490, name: '三角函數圖形 (sin)', formula: 'y = \\sin x', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'graph', 'sine', '高中', '三角函數', '圖形', '正弦'], proof: '正弦函數的圖形是週期性的波浪線，表示單位圓上點的 y 坐標隨角度變化的關係。' },
+            { id: 491, name: '三角函數圖形 (cos)', formula: 'y = \\cos x', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'graph', 'cosine', '高中', '三角函數', '圖形', '餘弦'], proof: '餘弦函數的圖形是週期性的波浪線，表示單位圓上點的 x 坐標隨角度變化的關係。' },
+            { id: 492, name: '指數函數圖形', formula: 'y = a^x \\text{ (當 } a > 0, a \\neq 1)', grade: '高中', topic: '代數', tags: ['high school', 'algebra', 'exponential function', 'graph', '高中', '代數', '指數函數', '圖形'], proof: '指數函數的圖形特徵取決於底數 $a$ 的值，通常是單調遞增或遞減的曲線。' },
+            { id: 493, name: '對數函數圖形', formula: 'y = \\log_a x \\text{ (當 } a > 0, a \\neq 1)', grade: '高中', topic: '代數', tags: ['high school', 'algebra', 'logarithmic function', 'graph', '高中', '代數', '對數函數', '圖形'], proof: '對數函數的圖形是其對應指數函數圖形關於直線 $y=x$ 的對稱。' },
+            { id: 494, name: '導數的幾何意義', formula: '\\text{函數曲線在某點的切線斜率}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'derivative', 'geometric meaning', '高中', '微積分', '導數', '幾何意義'], proof: '導數的定義就是割線斜率的極限，而割線在點趨近時會變成切線。' },
+            { id: 495, name: '積分的物理意義', formula: '\\text{位移、面積、功等}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'integral', 'physical meaning', '高中', '微積分', '積分', '物理意義'], proof: '積分可以表示累積量，例如速度的積分是位移，力的積分是功。' },
+            { id: 496, name: '期望值與變異數性質 (常數乘積)', formula: 'E(cX) = cE(X), \\text{Var}(cX) = c^2 \\text{Var}(X)', grade: '高中', topic: '機率與統計', tags: ['high school', 'probability', 'statistics', 'expected value', 'variance', 'properties', '高中', '機率', '統計', '期望值', '變異數', '性質'], proof: '這些性質可以從期望值和變異數的定義直接推導。' },
+            { id: 497, name: '線性回歸 (簡單)', formula: 'y = \\beta_0 + \\beta_1 x + \\epsilon', grade: '高中', topic: '機率與統計', tags: ['high school', 'statistics', 'linear regression', '高中', '統計', '線性回歸'], proof: '簡單線性回歸用於建立兩個變數之間的線性關係模型，透過最小二乘法估計係數。' },
+            { id: 498, name: '矩陣的逆 (3x3)', formula: '\\mathbf{A}^{-1} = \\frac{1}{\\det(\\mathbf{A})} \\text{adj}(\\mathbf{A})', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'matrix inverse', '高中', '大學', '線性代數', '逆矩陣'], proof: '3x3 矩陣的逆矩陣計算涉及其行列式和伴隨矩陣。' },
+            { id: 499, name: '複數的加減法', formula: '(a+bi) \\pm (c+di) = (a \\pm c) + (b \\pm d)i', grade: '高中', topic: '複數', tags: ['high school', 'complex numbers', 'addition', 'subtraction', '高中', '複數', '加法', '減法'], proof: '複數的加減法是將實部和虛部分別相加減。' },
+            { id: 500, name: '複數的乘法', formula: '(a+bi)(c+di) = (ac-bd) + (ad+bc)i', grade: '高中', topic: '複數', tags: ['high school', 'complex numbers', 'multiplication', '高中', '複數', '乘法'], proof: '複數的乘法是利用分配律和 $i^2 = -1$ 進行展開。' },
+            { id: 501, name: '複數的除法', formula: '\\frac{a+bi}{c+di} = \\frac{(a+bi)(c-di)}{(c+di)(c-di)} = \\frac{(ac+bd) + (bc-ad)i}{c^2+d^2}', grade: '高中', topic: '複數', tags: ['high school', 'complex numbers', 'division', '高中', '複數', '除法'], proof: '複數的除法是透過乘以分母的共軛複數來實數化分母。' },
+            { id: 502, name: '微積分應用：最佳化問題', formula: '\\text{尋找函數的極大值或極小值}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'optimization', '高中', '微積分', '最佳化'], proof: '最佳化問題通常透過求導並令導數為零來尋找臨界點，然後使用一階或二階導數判斷法確定極值。' },
+            { id: 503, name: '微積分應用：相關變率', formula: '\\frac{dy}{dt} = \\frac{dy}{dx} \\frac{dx}{dt}', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'related rates', '高中', '微積分', '相關變率'], proof: '相關變率問題是利用鏈式法則將不同變數的變化率聯繫起來。' },
+            { id: 504, name: '微積分應用：曲線下的面積', formula: 'A = \\int_a^b f(x) dx', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'area under curve', '高中', '微積分', '面積'], proof: '曲線下的面積是定積分的直接應用，表示函數在給定區間內的累積量。' },
+            { id: 505, name: '微積分應用：平均值定理 (積分)', formula: '\\frac{1}{b-a} \\int_a^b f(x) dx = f(c) \\text{ (對於某個 } c \\in [a,b])', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'mean value theorem for integrals', '大學', '微積分', '平均值定理'], proof: '積分的平均值定理表明，函數在一個區間上的平均值等於函數在區間內某一點的值。' },
+            { id: 506, name: '微積分：不定型極限', formula: '\\frac{0}{0}, \\frac{\\infty}{\\infty}, 0 \\cdot \\infty, \\infty - \\infty, 1^\\infty, 0^0, \\infty^0', grade: '高中', topic: '微積分', tags: ['high school', 'calculus', 'indeterminate forms', '高中', '微積分', '不定型'], proof: '這些是不定型極限的常見形式，通常需要透過洛必達法則或其他代數技巧來求解。' },
+            { id: 507, name: '三角函數的倒數關係', formula: '\\csc \\theta = \\frac{1}{\\sin \\theta}, \\sec \\theta = \\frac{1}{\\cos \\theta}, \\cot \\theta = \\frac{1}{\\tan \\theta}', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'reciprocal identities', '高中', '三角函數', '倒數關係'], proof: '這些關係直接從三角函數的定義推導。' },
+            { id: 508, name: '三角函數的商數關係', formula: '\\tan \\theta = \\frac{\\sin \\theta}{\\cos \\theta}, \\cot \\theta = \\frac{\\cos \\theta}{\\sin \\theta}', grade: '高中', topic: '三角函數', tags: ['high school', 'trigonometry', 'quotient identities', '高中', '三角函數', '商數關係'], proof: '這些關係直接從三角函數的定義推導。' },
+            { id: 509, name: '線性代數：向量的線性組合', formula: '\\mathbf{v} = c_1 \\mathbf{v}_1 + c_2 \\mathbf{v}_2 + ... + c_k \\mathbf{v}_k', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'linear combination', '高中', '線性代數', '向量', '線性組合'], proof: '一個向量是其他向量的線性組合，表示它可以被這些向量「生成」。' },
+            { id: 510, name: '線性代數：向量的內積性質', formula: '\\mathbf{u} \\cdot \\mathbf{v} = \\mathbf{v} \\cdot \\mathbf{u} \\\\ \\mathbf{u} \\cdot (\\mathbf{v} + \\mathbf{w}) = \\mathbf{u} \\cdot \\mathbf{v} + \\mathbf{u} \\cdot \\mathbf{w} \\\\ (c\\mathbf{u}) \\cdot \\mathbf{v} = c(\\mathbf{u} \\cdot \\mathbf{v})', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'dot product', 'properties', '高中', '線性代數', '內積', '性質'], proof: '這些性質可以從內積的代數定義直接推導。' },
+            { id: 511, name: '機率：期望值定義 (連續)', formula: 'E(X) = \\int_{-\\infty}^{\\infty} x f(x) dx', grade: '大學/進階', topic: '機率與統計', tags: ['university', 'probability', 'statistics', 'expected value', 'continuous', '大學', '機率', '統計', '期望值', '連續'], proof: '連續隨機變數的期望值是其值與機率密度函數的乘積在整個定義域上的積分。' },
+            { id: 512, name: '機率：變異數定義 (連續)', formula: '\\text{Var}(X) = \\int_{-\\infty}^{\\infty} (x - E(X))^2 f(x) dx', grade: '大學/進階', topic: '機率與統計', tags: ['university', 'probability', 'statistics', 'variance', 'continuous', '大學', '機率', '統計', '變異數', '連續'], proof: '連續隨機變數的變異數是其平方差的期望值。' },
+            { id: 513, name: '微積分：泰勒級數', formula: 'f(x) = f(a) + f\'(a)(x-a) + \\frac{f\'\'(a)}{2!}(x-a)^2 + ...', grade: '大學/進階', topic: '微積分', tags: ['university', 'calculus', 'Taylor series', '大學', '微積分', '泰勒級數'], proof: '泰勒級數是泰勒展開式的更一般形式，表示函數在某一點附近的行為。' },
+            { id: 514, name: '微積分：傅立葉轉換性質', formula: '\\mathcal{F}\\{f\'(x)\\} = i2\\pi\\xi F(\\xi), \\mathcal{F}\\{f(x-a)\\} = e^{-i2\\pi a \\xi} F(\\xi)', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'Fourier transform', 'properties', '大學', '微分方程', '傅立葉轉換', '性質'], proof: '傅立葉轉換的性質使其在信號處理和偏微分方程求解中非常有用。' },
+            { id: 515, name: '微積分：拉普拉斯轉換性質', formula: '\\mathcal{L}\\{f\'(t)\\} = sF(s) - f(0), \\mathcal{L}\\{e^{at}f(t)\\} = F(s-a)', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'Laplace transform', 'properties', '大學', '微分方程', '拉普拉斯轉換', '性質'], proof: '拉普拉斯轉換的性質使其在求解線性常微分方程中非常有用。' },
+            { id: 516, name: '線性代數：行階梯形', formula: '\\text{矩陣經過列運算後的簡化形式}', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'row echelon form', '高中', '線性代數', '行階梯形'], proof: '行階梯形用於求解線性方程組和計算矩陣的秩。' },
+            { id: 517, name: '線性代數：簡化行階梯形', formula: '\\text{行階梯形進一步簡化，主元為1，主元列其他元素為0}', grade: '高中', topic: '線性代數', tags: ['high school', 'linear algebra', 'reduced row echelon form', '高中', '線性代數', '簡化行階梯形'], proof: '簡化行階梯形是唯一確定的，用於求解線性方程組的通解。' },
+            { id: 518, name: '線性代數：特徵多項式', formula: '\\det(\\mathbf{A} - \\lambda \\mathbf{I}) = 0', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'characteristic polynomial', '大學', '線性代數', '特徵多項式'], proof: '特徵多項式的根是矩陣的特徵值。' },
+            { id: 519, name: '線性代數：凱萊-哈密頓定理', formula: '\\text{每個方陣都是其特徵多項式的根}', grade: '大學/進階', topic: '線性代數', tags: ['university', 'linear algebra', 'Cayley-Hamilton theorem', '大學', '線性代數', '凱萊-哈密頓定理'], proof: '凱萊-哈密頓定理表明，將矩陣代入其特徵多項式會得到零矩陣。' },
+            { id: 520, name: '拓撲學：同胚', formula: '\\text{兩個拓撲空間之間存在連續且有連續逆函數的雙射}', grade: '大學/進階', topic: '拓撲學', tags: ['university', 'topology', 'homeomorphism', '大學', '拓撲學', '同胚'], proof: '同胚是拓撲空間之間的等價關係，表示它們在拓撲性質上是相同的。' },
+            { id: 521, name: '複變函數：解析函數', formula: '\\text{在定義域內可複微分的函數}', grade: '大學/進階', topic: '複變函數', tags: ['university', 'complex analysis', 'analytic function', '大學', '複變函數', '解析函數'], proof: '解析函數具有許多良好的性質，例如可以表示為冪級數，並且滿足柯西-黎曼方程。' },
+            { id: 522, name: '複變函數：奇異點', formula: '\\text{函數不解析的點}', grade: '大學/進階', topic: '複變函數', tags: ['university', 'complex analysis', 'singularity', '大學', '複變函數', '奇異點'], proof: '奇異點是複變函數論中重要的概念，用於分類函數的行為。' },
+            { id: 523, name: '微分方程：分離變數法', formula: '\\frac{dy}{dx} = f(x)g(y) \\Rightarrow \\int \\frac{dy}{g(y)} = \\int f(x) dx', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'separation of variables', '大學', '微分方程', '分離變數法'], proof: '分離變數法是一種求解一階常微分方程的方法，透過將變數分離到等式的兩邊進行積分。' },
+            { id: 524, name: '微分方程：線性一階 ODE', formula: 'y\' + P(x)y = Q(x)', grade: '大學/進階', topic: '微分方程', tags: ['university', 'differential equations', 'linear first order ODE', '大學', '微分方程', '線性一階ODE'], proof: '線性一階常微分方程可以透過積分因子法求解。' },
+            { id: 525, name: '實分析：開集與閉集性質', formula: '\\text{任意個開集的聯集是開集，有限個開集的交集是開集}', grade: '大學/進階', topic: '實分析', tags: ['university', 'real analysis', 'open set', 'closed set', 'properties', '大學', '實分析', '開集', '閉集', '性質'], proof: '這些性質是拓撲空間定義的基礎。' },
+            { id: 526, name: '實分析：序列的收斂', formula: '\\text{若對於任意 } \\epsilon > 0 \\text{，存在 } N \\text{，使得當 } n > N \\text{ 時，有 } |x_n - L| < \\epsilon', grade: '大學/進階', topic: '實分析', tags: ['university', 'real analysis', 'sequence convergence', '大學', '實分析', '序列', '收斂'], proof: '序列收斂的嚴格定義，表示序列的項無限接近於一個極限值。' },
+            { id: 527, name: '抽象代數：正規子群', formula: '\\text{子群 N 是群 G 的正規子群，若 } \\forall g \\in G, gNg^{-1} = N', grade: '大學/進階', topic: '抽象代數', tags: ['university', 'abstract algebra', 'normal subgroup', '大學', '抽象代數', '正規子群'], proof: '正規子群是群論中一個重要的概念，用於構造商群。' },
+            { id: 528, name: '抽象代數：商群', formula: 'G/N = \\{gN : g \\in G\\}', grade: '大學/進階', topic: '抽象代數', tags: ['university', 'abstract algebra', 'quotient group', '大學', '抽象代數', '商群'], proof: '商群是透過正規子群對群進行劃分而形成的新的群結構。' },
+            { id: 529, name: '抽象代數：理想', formula: '\\text{環 R 的子集 I，滿足加法子群且對 R 的元素有吸收性}', grade: '大學/進階', topic: '抽象代數', tags: ['university', 'abstract algebra', 'ideal', '大學', '抽象代數', '理想'], proof: '理想是環論中類似於群論中正規子群的概念，用於構造商環。' },
+            { id: 530, name: '抽象代數：商環', formula: 'R/I = \\{r+I : r \\in R\\}', grade: '大學/進階', topic: '抽象代數', tags: ['university', 'abstract algebra', 'quotient ring', '大學', '抽象代數', '商環'], proof: '商環是透過理想對環進行劃分而形成的新的環結構。' },
+            { id: 531, name: '扇形弧長 (徑度制)', formula: 'L = r\\theta \\text{ (其中 } \\theta \\text{ 為弧度)}', grade: '國中', topic: '幾何', tags: ['junior high', 'geometry', 'arc length', 'sector', 'radians', '國中', '幾何', '弧長', '扇形', '徑度制'], proof: '扇形弧長是圓周長的一部分，其比例由圓心角 $\\theta$ 佔圓周角 $2\\pi$ 的比例決定。因此 $L = \\frac{\\theta}{2\\pi} \\times 2\\pi r = r\\theta$。' }
+        ];
+
+        class MathFormulaApp {
+            constructor(formulas) {
+                this.formulas = formulas.map(f => ({
+                    ...f,
+                    searchableText: `${f.name} ${f.formula} ${f.tags.join(' ')}`.toLowerCase()
+                }));
+
+                this.elements = {
+                    searchInput: document.getElementById('searchInput'),
+                    clearSearchBtn: document.getElementById('clearSearchBtn'),
+                    gradeFilter: document.getElementById('gradeFilter'),
+                    topicFilter: document.getElementById('topicFilter'),
+                    resultsContainer: document.getElementById('resultsContainer'),
+                    noResults: document.getElementById('noResults'),
+                    proofModal: document.getElementById('proofModal'),
+                    modalTitle: document.getElementById('modalTitle'),
+                    modalBody: document.getElementById('modalBody'),
+                    closeModalBtn: document.getElementById('closeModalBtn'),
+                    termsModal: document.getElementById('termsModal'),
+                    closeTermsModalBtn: document.getElementById('closeTermsModalBtn'),
+                    openTermsBtn: document.getElementById('openTermsBtn'),
+                    autocompleteSuggestions: document.getElementById('autocompleteSuggestions'),
+                    assistant: document.getElementById('assistant'),
+                    assistantIcon: document.querySelector('#assistant .assistant-icon'),
+                    assistantMessage: document.getElementById('assistant-message'),
+                    assistantMessageText: document.querySelector('#assistant-message span:first-child'),
+                    assistantMessageCloseBtn: document.querySelector('#assistant-message .close-btn'),
+                    loader: document.getElementById('loader')
+                };
+
+                this.lastFocusedElement = null;
+                this.assistantMessages = {
+                    initial: ["歡迎來到數學公式搜尋引擎！試試搜尋或篩選公式喔！", "我是你的數學助教！有任何數學問題都可以問我喔！"],
+                    noResults: ["哎呀，沒有找到符合的公式，試試調整篩選條件或換個關鍵字吧！", "別灰心，數學公式千變萬化，換個角度搜尋或許有驚喜！", "找不到嗎？試著縮小範圍，或者檢查一下輸入是否有誤！"],
+                    searchResults: ["太棒了！找到了一些公式，希望對你有幫助！", "這些公式是不是很酷呢？繼續探索吧！", "恭喜你！發現了這些有用的數學寶藏！"],
+                    openProof: ["這個證明是不是很有趣呢？深入了解數學的奧秘吧！", "證明是數學的靈魂，仔細研究會收穫滿滿喔！", "看懂證明，才能真正掌握公式！"],
+                    random: [
+                        "數學很有趣，一起來探索吧！",
+                        "學習數學的路上，助教永遠都在！",
+                        "別忘了，多練習才能更熟練喔！",
+                        "試試看輸入『微積分』或『畢氏定理』！",
+                        "想知道更多？篩選年級或主題看看！",
+                        "每個證明都藏著數學的奧秘喔！",
+                        "別擔心，數學沒有那麼難！",
+                        "數學世界廣闊無垠，一起來遨遊吧！",
+                        "別灰心，每一次嘗試都是進步！",
+                        "試著用不同的角度思考問題，會有新發現喔！",
+                        "數學的魅力在於它的邏輯與美感！",
+                        "遇到困難時，深呼吸，再試一次！"
+                    ]
+                };
+                this.assistantMessageTimeout = null;
+                this.debounceTimeout = null;
+
+                this.bindEvents();
+            }
+
+            debounce(func, delay) {
+                return function(...args) {
+                    clearTimeout(this.debounceTimeout);
+                    this.debounceTimeout = setTimeout(() => func.apply(this, args), delay);
+                }.bind(this);
+            }
+
+            bindEvents() {
+                this.elements.searchInput.addEventListener('input', this.debounce(this.handleSearchInputDebounced, 300));
+                this.elements.searchInput.addEventListener('keydown', this.handleSearchInputKeydown.bind(this));
+                this.elements.searchInput.addEventListener('focus', () => {
+                    if (this.elements.searchInput.value.length > 0) {
+                        this.elements.clearSearchBtn.classList.remove('hidden');
+                    }
+                });
+                this.elements.searchInput.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        this.elements.clearSearchBtn.classList.add('hidden');
+                    }, 100);
+                });
+
+                this.elements.clearSearchBtn.addEventListener('click', () => {
+                    this.elements.searchInput.value = '';
+                    this.elements.clearSearchBtn.classList.add('hidden');
+                    this.elements.autocompleteSuggestions.classList.add('hidden');
+                    this.performSearch();
+                    this.elements.searchInput.focus();
+                });
+
+                this.elements.gradeFilter.addEventListener('change', this.performSearch.bind(this));
+                this.elements.topicFilter.addEventListener('change', this.performSearch.bind(this));
+
+                this.elements.closeModalBtn.addEventListener('click', this.closeProof.bind(this));
+                this.elements.proofModal.addEventListener('click', (e) => {
+                    if (e.target === this.elements.proofModal) {
+                        this.closeProof();
+                    }
+                });
+
+                this.elements.closeTermsModalBtn.addEventListener('click', this.closeTerms.bind(this));
+                this.elements.termsModal.addEventListener('click', (e) => {
+                    if (e.target === this.elements.termsModal) {
+                        this.closeTerms();
+                    }
+                });
+                this.elements.openTermsBtn.addEventListener('click', this.openTerms.bind(this));
+
+                document.addEventListener('keydown', this.handleEscapeKey.bind(this));
+                this.elements.autocompleteSuggestions.addEventListener('click', this.handleAutocompleteClick.bind(this));
+
+                this.elements.assistant.addEventListener('click', this.showRandomAssistantMessage.bind(this));
+                this.elements.assistantMessageCloseBtn.addEventListener('click', this.hideAssistantMessage.bind(this));
+            }
+
+            handleSearchInputDebounced() {
+                const query = this.elements.searchInput.value.toLowerCase();
+                this.showAutocompleteSuggestions(query);
+                this.performSearch();
+                if (query.length > 0) {
+                    this.elements.clearSearchBtn.classList.remove('hidden');
+                } else {
+                    this.elements.clearSearchBtn.classList.add('hidden');
+                }
+            }
+
+            handleSearchInputKeydown(e) {
+                const suggestions = Array.from(this.elements.autocompleteSuggestions.children);
+                let activeIndex = suggestions.findIndex(li => li.classList.contains('active'));
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (activeIndex < suggestions.length - 1) {
+                        if (activeIndex !== -1) suggestions[activeIndex].classList.remove('active');
+                        suggestions[++activeIndex].classList.add('active');
+                        suggestions[activeIndex].scrollIntoView({ block: 'nearest' });
+                    } else if (suggestions.length > 0) {
+                        if (activeIndex !== -1) suggestions[activeIndex].classList.remove('active');
+                        activeIndex = 0;
+                        suggestions[activeIndex].classList.add('active');
+                        suggestions[activeIndex].scrollIntoView({ block: 'nearest' });
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (activeIndex > 0) {
+                        if (activeIndex !== -1) suggestions[activeIndex].classList.remove('active');
+                        suggestions[--activeIndex].classList.add('active');
+                        suggestions[activeIndex].scrollIntoView({ block: 'nearest' });
+                    } else if (suggestions.length > 0) {
+                        if (activeIndex !== -1) suggestions[activeIndex].classList.remove('active');
+                        activeIndex = suggestions.length - 1;
+                        suggestions[activeIndex].classList.add('active');
+                        suggestions[activeIndex].scrollIntoView({ block: 'nearest' });
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (activeIndex !== -1) {
+                        this.elements.searchInput.value = suggestions[activeIndex].textContent;
+                        this.elements.autocompleteSuggestions.classList.add('hidden');
+                        this.performSearch();
+                    }
+                } else if (e.key === 'Escape') {
+                    this.elements.autocompleteSuggestions.classList.add('hidden');
+                }
+            }
+
+            showAutocompleteSuggestions(query) {
+                this.elements.autocompleteSuggestions.innerHTML = '';
+                if (query.length < 2) {
+                    this.elements.autocompleteSuggestions.classList.add('hidden');
+                    return;
+                }
+
+                const matchedNames = new Set();
+                const suggestions = this.formulas.filter(f =>
+                    f.searchableText.includes(query)
+                ).map(f => f.name);
+
+                suggestions.forEach(name => {
+                    if (!matchedNames.has(name)) {
+                        const li = document.createElement('li');
+                        li.textContent = name;
+                        this.elements.autocompleteSuggestions.appendChild(li);
+                        matchedNames.add(name);
+                    }
+                });
+
+                if (this.elements.autocompleteSuggestions.children.length > 0) {
+                    this.elements.autocompleteSuggestions.classList.remove('hidden');
+                } else {
+                    this.elements.autocompleteSuggestions.classList.add('hidden');
+                }
+            }
+
+            handleAutocompleteClick(e) {
+                if (e.target.tagName === 'LI') {
+                    this.elements.searchInput.value = e.target.textContent;
+                    this.elements.autocompleteSuggestions.classList.add('hidden');
+                    this.performSearch();
+                }
+            }
+
+            performSearch() {
+                this.elements.loader.classList.add('visible');
+                this.elements.resultsContainer.innerHTML = '';
+                this.elements.noResults.classList.add('hidden');
+
+                const query = this.elements.searchInput.value.toLowerCase();
+                const selectedGrade = this.elements.gradeFilter.value;
+                const selectedTopic = this.elements.topicFilter.value;
+
+                const filteredFormulas = this.formulas.filter(formula => {
+                    const matchesQuery = query === '' || formula.searchableText.includes(query);
+                    const matchesGrade = selectedGrade === '' || formula.grade === selectedGrade;
+                    const matchesTopic = selectedTopic === '' || formula.topic === selectedTopic;
+                    return matchesQuery && matchesGrade && matchesTopic;
+                });
+
+                setTimeout(() => {
+                    this.displayResults(filteredFormulas);
+                    this.elements.loader.classList.remove('visible');
+
+                    if (filteredFormulas.length === 0 && (query.length > 0 || selectedGrade !== '' || selectedTopic !== '')) {
+                        this.showContextualAssistantMessage('noResults');
+                    } else if (filteredFormulas.length > 0 && query.length > 0) {
+                        this.showContextualAssistantMessage('searchResults');
+                    }
+                    this.elements.resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 500);
+            }
+
+            displayResults(results) {
+                this.elements.resultsContainer.innerHTML = '';
+                if (results.length === 0) {
+                    this.elements.noResults.classList.remove('hidden');
+                } else {
+                    this.elements.noResults.classList.add('hidden');
+                    results.forEach(formula => {
+                        const card = this.createFormulaCard(formula);
+                        this.elements.resultsContainer.appendChild(card);
+                    });
+                }
+                if (window.MathJax) {
+                    MathJax.typesetPromise([this.elements.resultsContainer]);
+                }
+            }
+
+            createFormulaCard(formula) {
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-lg shadow-md p-6 flex flex-col justify-between border border-gray-200 hover:shadow-lg transition-shadow duration-200';
+                card.innerHTML = `
+                    <div>
+                        <h3 class="text-xl font-semibold mb-2 card-title">${formula.name}</h3>
+                        <p class="text-gray-600 text-sm mb-2">年級: ${formula.grade} | 主題: ${formula.topic}</p>
+                        <div class="formula-display bg-gray-50 p-3 rounded-md mb-4 text-center">
+                            <div class="text-lg card-formula">$$${formula.formula}$$</div>
+                        </div>
+                    </div>
+                    <button class="btn-primary mt-4" data-id="${formula.id}" aria-haspopup="dialog" aria-controls="proofModal">查看證明</button>
+                `;
+                const viewProofBtn = card.querySelector('.btn-primary');
+                viewProofBtn.addEventListener('click', () => this.openProof(formula));
+                return card;
+            }
+
+            openProof(formula) {
+                this.lastFocusedElement = document.activeElement;
+                this.elements.modalTitle.textContent = `證明: ${formula.name}`;
+                this.elements.modalBody.innerHTML = `<div class="proof-content">${formula.proof}</div>`;
+                this.elements.proofModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+                this.elements.closeModalBtn.focus();
+                this.elements.closeModalBtn.setAttribute('aria-expanded', 'true');
+
+                this.elements.proofModal.style.opacity = '1';
+                this.elements.proofModal.querySelector('.modal-content').style.transform = 'scale(1)';
+
+                if (window.MathJax) {
+                    MathJax.typesetPromise([this.elements.modalBody]);
+                }
+                this.trapFocus(this.elements.proofModal);
+                this.showContextualAssistantMessage("openProof");
+            }
+
+            closeProof() {
+                this.elements.proofModal.classList.add('hidden');
+                document.body.style.overflow = '';
+                this.elements.closeModalBtn.setAttribute('aria-expanded', 'false');
+                if (this.lastFocusedElement) {
+                    this.lastFocusedElement.focus();
+                    this.lastFocusedElement = null;
+                }
+            }
+
+            openTerms() {
+                this.lastFocusedElement = document.activeElement;
+                this.elements.termsModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+                this.elements.openTermsBtn.setAttribute('aria-expanded', 'true');
+
+                this.elements.termsModal.style.opacity = '1';
+                this.elements.termsModal.querySelector('.modal-content').style.transform = 'scale(1)';
+                this.trapFocus(this.elements.termsModal);
+            }
+
+            closeTerms() {
+                this.elements.termsModal.classList.add('hidden');
+                document.body.style.overflow = '';
+                
+                this.elements.openTermsBtn.setAttribute('aria-expanded', 'false');
+                if (this.lastFocusedElement) {
+                    this.lastFocusedElement.focus();
+                    this.lastFocusedElement = null;
+                }
+            }
+
+            handleEscapeKey(e) {
+                if (e.key === 'Escape') {
+                    if (!this.elements.proofModal.classList.contains('hidden')) {
+                        this.closeProof();
+                    } else if (!this.elements.termsModal.classList.contains('hidden')) {
+                        this.closeTerms();
+                    }
+                }
+            }
+
+            showAssistantMessage(message) {
+                clearTimeout(this.assistantMessageTimeout);
+                this.elements.assistantMessageText.textContent = message;
+                this.elements.assistantMessage.classList.add('visible');
+                this.elements.assistant.classList.add('speaking');
+
+                this.assistantMessageTimeout = setTimeout(() => {
+                    this.hideAssistantMessage();
+                }, 8000);
+            }
+
+            hideAssistantMessage() {
+                this.elements.assistantMessage.classList.remove('visible');
+                this.elements.assistant.classList.remove('speaking');
+                clearTimeout(this.assistantMessageTimeout);
+            }
+
+            showContextualAssistantMessage(type) {
+                const messages = this.assistantMessages[type];
+                if (messages && messages.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * messages.length);
+                    this.showAssistantMessage(messages[randomIndex]);
+                }
+            }
+
+            showRandomAssistantMessage() {
+                this.showContextualAssistantMessage('random');
+            }
+
+            trapFocus(element) {
+                const focusableEls = element.querySelectorAll('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])');
+                const firstFocusableEl = focusableEls[0];
+                const lastFocusableEl = focusableEls[focusableEls.length - 1];
+
+                element.addEventListener('keydown', (e) => {
+                    const isTabPressed = e.key === 'Tab';
+
+                    if (!isTabPressed) {
+                        return;
+                    }
+
+                    if (e.shiftKey) {
+                        if (document.activeElement === firstFocusableEl) {
+                            lastFocusableEl.focus();
+                            e.preventDefault();
+                        }
+                    } else {
+                        if (document.activeElement === lastFocusableEl) {
+                            firstFocusableEl.focus();
+                            e.preventDefault();
+                        }
+                    }
+                });
+                firstFocusableEl.focus();
+            }
+
+            init() {
+                if (window.MathJax) {
+                    MathJax.startup.promise.then(() => {
+                        this.performSearch();
+                        this.showContextualAssistantMessage('initial');
+                    });
+                } else {
+                    this.performSearch();
+                    this.showContextualAssistantMessage('initial');
+                }
+            }
+        }
+
+        window.onload = () => {
+            const app = new MathFormulaApp(formulas);
+            app.init();
+        };
+    </script>
+</body>
+</html>
